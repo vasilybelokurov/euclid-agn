@@ -409,3 +409,43 @@ def test_local_refinement_keeps_the_origin():
     coarse = quick_scan(spectrum, [RedshiftHypothesis(Z, "spe_galaxy", "halpha_complex")], settings)
     refined = refine_redshifts_locally(spectrum, coarse, settings)
     assert set(refined["origin"]) == {"spe_galaxy"}
+
+
+def test_redshift_prior_penalises_distance_and_is_capped():
+    from euclid_agn.fit.screen import apply_redshift_prior
+
+    scan = pd.DataFrame({"z": [1.20, 1.25, 2.0], "system": ["a", "b", "c"], "rank_statistic": [100.0, 100.0, 100.0]})
+    settings = ScreenSettings(phz_prior_sigma=0.05, phz_outlier_fraction=0.13, phz_prior_range=5.0)
+    out = apply_redshift_prior(scan, 1.20, settings)
+    assert out["prior_penalty"].iloc[0] == pytest.approx(0.0, abs=1e-9)
+    assert 0.0 < out["prior_penalty"].iloc[1] < out["prior_penalty"].iloc[2]
+    # the mixture caps the penalty near -2 ln(f/range / peak) ~ 11
+    assert 9.0 < out["prior_penalty"].iloc[2] < 13.0
+    assert out["rank_statistic_prior"].idxmax() == 0
+    # without a prior nothing changes
+    same = apply_redshift_prior(scan, None, settings)
+    assert (same["rank_statistic_prior"] == same["rank_statistic"]).all()
+
+
+def test_prior_breaks_the_single_line_degeneracy():
+    """A metal-poor ELG's H-alpha is ambiguous with Pa-beta at z=0.126 and [O III] at z=1.88.
+
+    [N II] and [S II] at ELG ratios are too weak to discriminate on their own;
+    a photometric redshift near 1.2 settles it.  (A truly lone H-alpha with no
+    [N II]/[S II] at all is unphysical and correctly loses to a single-line
+    Pa-beta template - the evidence-against working as designed.)
+    """
+    from euclid_agn.fit.hypotheses import blind_grid
+    from euclid_agn.fit.screen import apply_redshift_prior, refine_redshifts_locally
+
+    spectrum = make(
+        [LineTruth("Halpha", 8e-16, 150.0), LineTruth("NII6584", 6e-17, 150.0),
+         LineTruth("SII6716", 8e-17, 150.0), LineTruth("SII6731", 6e-17, 150.0)],
+        seed=77,
+    )
+    settings = ScreenSettings(broad_sigma_kms=(600.0,), n_refine=0, n_local=6, rank_by="template")
+    scan = refine_redshifts_locally(spectrum, quick_scan(spectrum, blind_grid(step_kms=600.0), settings), settings)
+    with_prior = apply_redshift_prior(scan, 1.25, settings)
+    best = with_prior.loc[with_prior["rank_statistic_prior"].idxmax()]
+    assert best["system"] == "halpha_complex"
+    assert abs(best["z"] - Z) < 0.01

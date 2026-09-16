@@ -55,7 +55,16 @@ class EmissionTemplate:
 
 
 TEMPLATES: tuple[EmissionTemplate, ...] = (
-    # --- H-alpha complex: star-forming through Seyfert-2 excitation ---------
+    # --- H-alpha complex: metal-poor ELG through Seyfert-2 excitation --------
+    # DESI emission-line galaxies at z ~ 1-1.6 have [N II]/H-alpha ~ 0.05-0.1
+    # and [S II]/H-alpha ~ 0.1-0.2; without this template a lone strong
+    # H-alpha was better explained by a single-line Pa-beta identification.
+    EmissionTemplate(
+        "halpha_elg",
+        "halpha_complex",
+        {"Halpha": 1.0, "NII6584": 0.07, "NII6548": 0.024, "SII6716": 0.10,
+         "SII6731": 0.07, "OI6300": 0.01},
+    ),
     EmissionTemplate(
         "halpha_hii",
         "halpha_complex",

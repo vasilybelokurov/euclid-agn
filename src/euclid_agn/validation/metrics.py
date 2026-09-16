@@ -23,7 +23,12 @@ import numpy as np
 import pandas as pd
 
 from euclid_agn.fit.hypotheses import blind_grid, deduplicate, from_catalogue
-from euclid_agn.fit.screen import ScreenSettings, quick_scan, refine_redshifts_locally
+from euclid_agn.fit.screen import (
+    ScreenSettings,
+    apply_redshift_prior,
+    quick_scan,
+    refine_redshifts_locally,
+)
 from euclid_agn.io.sir import open_sir_file
 from euclid_agn.validation.truth import agreement_summary, compare_redshifts
 
@@ -48,6 +53,7 @@ def blind_best_redshift(
     z_min: float = 0.0,
     z_max: float = 5.7,
     step_kms: float = 400.0,
+    z_prior: float | None = None,
 ) -> dict | None:
     """Best redshift from a blind scan, using all the line evidence.
 
@@ -58,10 +64,11 @@ def blind_best_redshift(
     if scan.empty:
         return None
     scan = refine_redshifts_locally(spectrum, scan, settings)
-    best = scan.loc[scan["rank_statistic"].idxmax()]
+    scan = apply_redshift_prior(scan, z_prior, settings)
+    best = scan.loc[scan["rank_statistic_prior"].idxmax()]
     runner_up = scan[scan["system"] != best["system"]]
     margin = (
-        float(best["rank_statistic"] - runner_up["rank_statistic"].max())
+        float(best["rank_statistic_prior"] - runner_up["rank_statistic_prior"].max())
         if not runner_up.empty
         else float("inf")
     )
@@ -80,6 +87,7 @@ def blind_best_redshift(
         "delta_chi2_penalised": float(best["delta_chi2_penalised"]),
         "delta_chi2_identification": float(best["delta_chi2_identification"]),
         "template": str(best["template"]),
+        "prior_penalty": float(best.get("prior_penalty", 0.0)),
         "n_components": int(best["n_components"]),
         "delta_chi2_over_other_system": margin,
     }
@@ -95,12 +103,17 @@ def blind_redshift_experiment(
     max_objects: int | None = None,
     reference_column: str = "spe_gal_z",
     include_catalogue_hypotheses: bool = False,
+    prior_column: str | None = None,
 ) -> BlindRedshiftResult:
     """Run the blind scan over cached files and compare with a reference.
 
     Only data availability restricts the sample: a minimum usable-pixel
     fraction, and the existence of a reference redshift to compare against.
     No host property and no line-strength criterion enters the selection.
+
+    With ``prior_column`` (e.g. ``"phz_mode_1"``) that column of the reference
+    is used as a soft prior in ranking; see
+    :func:`euclid_agn.fit.screen.apply_redshift_prior`.
 
     With ``include_catalogue_hypotheses`` the SPE and PHZ redshifts of each
     object are added to the blind grid, as the production pipeline does.  That
@@ -113,7 +126,7 @@ def blind_redshift_experiment(
     wanted = set(reference["object_id"].astype("int64"))
     reference_rows = (
         {int(r["object_id"]): r for _, r in reference.iterrows()}
-        if include_catalogue_hypotheses
+        if (include_catalogue_hypotheses or prior_column)
         else {}
     )
     rows: list[dict] = []
@@ -131,7 +144,13 @@ def blind_redshift_experiment(
                     per_object = deduplicate(
                         [*hypotheses, *from_catalogue(reference_rows[group.object_id])]
                     )
-                best = blind_best_redshift(spectrum, settings, hypotheses=per_object)
+                z_prior = None
+                if prior_column:
+                    value = reference_rows[group.object_id].get(prior_column)
+                    z_prior = float(value) if value is not None and np.isfinite(value) else None
+                best = blind_best_redshift(
+                    spectrum, settings, hypotheses=per_object, z_prior=z_prior
+                )
                 if best is None:
                     continue
                 best.update(
