@@ -267,3 +267,161 @@ individual dithers survive co-addition, as a function of contaminant count.
 4. Quantify pixel-to-pixel covariance in line-free regions of real spectra; it
    bounds how much a Δχ² can ever be trusted.
 5. Only then M3: Stage-1 combined-spectrum screening on a curated EDF-N subset.
+
+---
+
+## 2026-09-16 — session 2: public repo, data location, spectra availability, M2 primitives
+
+### Repository
+
+Public GitHub repository created at
+https://github.com/vasilybelokurov/euclid-agn (initial commit `61c0b06`).
+`euclid_agn.provenance.git_commit()` now returns a real SHA, so run manifests
+are reproducible as the spec requires.
+
+### Data location
+
+User instruction: downloaded data go to `~/data/euclid/`. That directory already
+held other Euclid work (DR1 star catalogues, Q1 cutouts and manifests, and
+`with_desi/desi_euclid_q1_galaxies.fits`, which will matter for M4 truth
+ingestion). `euclid_agn.io.cache.ArchiveCache` mirrors the archive's own layout
+underneath it, so SIR products land at
+
+```
+~/data/euclid/q1/SIR/<tile>/EUC_SIR_W-COMBSPEC_<tile>_<timestamp>.fits
+```
+
+alongside the existing `q1/cutouts`, `q1/manifests`, `q1/mosaics`. Downloads are
+atomic (temporary file, then rename), so an interrupted transfer can never be
+mistaken for a complete one. The cache is on by default; `archive.cache_enabled:
+false` streams byte ranges instead, which is cheaper for one object and much
+more expensive for a whole tile.
+
+### Spectra availability — measured
+
+**Catalogue level.** Counts from `euclid.objectid_spectrafile_association_q1`:
+
+| field | tiles | association rows | with a spectrum | fraction |
+|---|---:|---:|---:|---:|
+| EDF-N | 124 | 11 378 352 | 1 683 630 | 14.8 % |
+| EDF-S | 148 | 13 060 965 | 1 874 296 | 14.4 % |
+| EDF-F | 72 | 5 328 489 | 749 251 | 14.1 % |
+| LDN1641 | 8 | 185 624 | **0** | 0 % |
+| **total** | **352** | **29 953 430** | **4 307 177** | **14.4 %** |
+
+The rows and the spectra both sum exactly to the Q1 totals queried
+independently, which re-confirms that the four field cones partition the
+release. Two things worth carrying forward:
+
+- 4 307 177 matches the "about 4.3 million attempted extractions" in the
+  project brief, so the brief's parent-sample figure is confirmed against the
+  archive rather than taken on trust;
+- **LDN1641 has no slitless spectroscopy in Q1 at all.** The star-forming field
+  contributes 185 624 MER sources and zero spectra. Any survey-wide statement
+  must be about EDF-N, EDF-S and EDF-F only.
+
+**Pixel level.** 1214 combined spectra opened across seven tiles in the three
+spectroscopic fields (`euclid-agn archive availability --sample-tile ...`,
+figure `outputs/availability_sample.png`, table
+`outputs/availability_sample.parquet`):
+
+| quantity | value |
+|---|---|
+| usable pixel fraction in 12500-18500 Å, median | 0.97 |
+| fraction with usable fraction ≥ 0.5 | 79.1 % |
+| fraction with **zero** usable science pixels | 13.6 % |
+| median continuum S/N per pixel (fittable spectra) | 3.1 |
+| fraction fittable **and** S/N > 3 | 40.4 % |
+| fraction fittable **and** S/N > 1 | 58.7 % |
+| effective LSF σ, median / p90 / p99 | 15.0 / 25.6 / 61.9 Å |
+| fraction with LSF σ above twice the median | 5.9 % |
+| fraction with 4 or more contributing dithers | 58 % |
+| fraction with 2 or fewer dithers | 24 % |
+
+Scaling the sample fractions to the 4.31 million available spectra gives a
+working expectation of roughly 3.4 million with enough unmasked pixels to fit,
+about 2.5 million with continuum S/N above 1, and about 1.7 million above S/N 3.
+These are availability numbers, not detectability numbers — what a given S/N
+buys in broad-line sensitivity is an injection/recovery question for M4.
+
+Consequences for the design:
+
+- the dither-coherence discriminator, which the plan leans on heavily, is only
+  strong for the 58 % with four dithers; for the 24 % with one or two dithers it
+  barely exists, and that has to be a reported axis of the selection function,
+  not a silent cut;
+- 13.6 % of extracted spectra carry no usable science pixels at all, so
+  "has a spectrum" and "can be fitted" differ by a factor of about 1.2 before any
+  S/N consideration.
+
+### M2 progress — model primitives
+
+Delivered with synthetic tests: constrained regularised linear solver, B-spline
+continuum, non-parametric narrow-line system, broad-line components, and the
+forward model that assembles M0/M1.
+
+**Two real bugs found by the tests, both now fixed.**
+
+1. *The regularisation weight was silently ignored.* The solver normalised the
+   penalty matrix to the Frobenius norm of the design matrix, which discarded
+   the caller's strength entirely: smoothness 0.3 and 1.0 gave bit-identical
+   fits. Penalty *structure* (a difference operator) and *strength* (a
+   dimensionless weight) are now separate, and a test asserts that varying the
+   weight monotonically changes the effective degrees of freedom.
+
+2. *The alternating narrow-line fit is not exactly monotone with a penalty.*
+   With the scale-free penalty the objective is re-normalised at each half-step,
+   so the data chi-squared can rise slightly between iterations — measured at
+   0.03 % of chi-squared. The unpenalised case is exactly monotone, as theory
+   requires. Both behaviours are now separate tests rather than one wrong
+   assertion.
+
+**Numerical note.** numpy 1.26.4 built against Apple Accelerate raises spurious
+`divide by zero / overflow / invalid value encountered in matmul` warnings on
+ordinary finite matrix products; verified on a 600×64 by 64×600 product of
+Gaussian random numbers. `euclid_agn.numerics` suppresses them around
+matmul-heavy blocks and asserts finiteness of the results instead, so a real
+numerical failure still raises.
+
+**Design decision recorded.** The narrow-line problem is *bilinear*, not linear:
+the model is linear in the amplitudes at fixed profile and linear in the profile
+at fixed amplitudes, but not in both at once. The brief's phrase "solve
+amplitudes/profile coefficients as a constrained regularised linear problem"
+holds for each half. The implementation alternates between the two constrained
+solves with the continuum re-fitted in both, fixes the scale degeneracy by
+normalising the profile to unit integral so amplitudes are physical fluxes, and
+reports its chi-squared history. A test confirms the answer is insensitive to
+the starting profile at the 5 % level.
+
+**Resolution caveat.** One bin is 13.4 Å and the effective LSF σ is about the
+same, so at H-α in mid-range one pixel is roughly 270 km/s. A velocity grid
+finer than that measures the penalty, not the data;
+`suggested_velocity_step` reports the resolution-matched value.
+
+### Test results
+
+- Offline suite: **154 passed, 5 deselected**, 1.2 s.
+- Online suite: **5 passed in 182 s** (run earlier this session, unchanged).
+
+Headline synthetic results now in the suite:
+
+- a noiseless pure-narrow spectrum yields a broad flux below 5 % of the narrow
+  H-α flux — the model does not manufacture a BLR;
+- an injected broad H-α of 1.5e-15 erg s⁻¹ cm⁻² at 2500 km s⁻¹ is recovered to
+  25 % with Δχ² > 100;
+- both Δχ² and the recovered broad flux increase monotonically with injected
+  broad flux;
+- a broad component on a forbidden transition is refused unless explicitly
+  requested for a null test.
+
+### Next actions
+
+1. `fit/hypotheses.py`: redshift-hypothesis generation from SPE, PHZ, detected
+   peaks and a blind line-family scan, with the origin of each hypothesis
+   recorded.
+2. `fit/screen.py`: Stage-1 scan over (z, σ_BLR, Δv_BLR) with the small
+   non-linear space optimised and the linear solve inside.
+3. Measure pixel-to-pixel covariance in line-free regions of real spectra before
+   any Δχ² is turned into a significance.
+4. First Stage-1 run on a curated EDF-N subset, with DESI labels from
+   `~/data/euclid/with_desi/desi_euclid_q1_galaxies.fits` held back.

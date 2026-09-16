@@ -26,8 +26,22 @@ log = logging.getLogger(__name__)
 
 
 def make_backend(config: Config) -> ArchiveBackend:
+    """Build the archive backend described by ``config``, cache included."""
     if config.archive.backend == "irsa":
-        return IrsaQ1Backend(anon=config.archive.anon_s3, timeout=config.archive.tap_timeout_s)
+        from euclid_agn.io.cache import DEFAULT_CACHE_ROOT, ArchiveCache
+
+        cache = ArchiveCache(
+            root=config.archive.cache_dir or DEFAULT_CACHE_ROOT,
+            enabled=config.archive.cache_enabled,
+            max_bytes=(
+                int(config.archive.cache_max_gb * 1024**3)
+                if config.archive.cache_max_gb
+                else None
+            ),
+        )
+        return IrsaQ1Backend(
+            anon=config.archive.anon_s3, timeout=config.archive.tap_timeout_s, cache=cache
+        )
     from euclid_agn.archive.esa import EsaBackend
 
     return EsaBackend(release=config.archive.release)

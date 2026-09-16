@@ -16,11 +16,20 @@ from pydantic import BaseModel, Field
 
 
 class ArchiveConfig(BaseModel):
+    """Where data comes from and where downloaded files are kept.
+
+    ``cache_dir`` defaults to ``~/data/euclid``.  Archive files are mirrored
+    there under their own relative paths, so a Q1 combined-spectra file lands at
+    ``~/data/euclid/q1/SIR/<tile>/EUC_SIR_W-COMBSPEC_<tile>_<ts>.fits``.
+    """
+
     backend: Literal["irsa", "esa"] = "irsa"
     release: str = "q1"
     anon_s3: bool = True
     tap_timeout_s: float = 900.0
     cache_dir: Path | None = None
+    cache_enabled: bool = True
+    cache_max_gb: float | None = None
 
 
 class SelectionConfig(BaseModel):

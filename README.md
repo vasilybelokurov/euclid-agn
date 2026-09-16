@@ -16,7 +16,7 @@ can be reported against them.
 |---|---|
 | M0 package foundation | done |
 | M1 Q1 archive layer | done (IRSA backend; ESA backend declared, not implemented) |
-| M2 simulator and model primitives | partial — line catalogue, LSF, simulator done; continuum/NLR/BLR solvers pending |
+| M2 simulator and model primitives | done — line catalogue, LSF, simulator, constrained linear solver, B-spline continuum, non-parametric NLR, BLR components, M0/M1 forward model |
 | M3 Stage-1 fitter | not started |
 | M4 EDF-N validation | not started |
 | M5 joint dither fitting | not started |
@@ -24,6 +24,21 @@ can be reported against them.
 
 No AGN detection claim is possible yet: nothing has been fitted, so nothing has
 been validated.
+
+## Q1 spectra availability (measured 2026-09-16)
+
+| | |
+|---|---|
+| MER sources considered for extraction | 29 953 430 |
+| sources with an extracted spectrum | **4 307 177** (14.4 %) |
+| by field | EDF-N 1 683 630 · EDF-S 1 874 296 · EDF-F 749 251 · **LDN1641 0** |
+| of 1214 sampled spectra: usable pixel fraction ≥ 0.5 | 79.1 % |
+| of the same: zero usable science pixels | 13.6 % |
+| fittable and continuum S/N > 3 | 40.4 % |
+| 4 or more contributing dithers | 58 % |
+
+LDN1641 has no Q1 slitless spectroscopy at all. See
+`outputs/availability_sample.png` and the journal for the full breakdown.
 
 ## Install and run
 
@@ -38,7 +53,11 @@ python -m euclid_agn spectra inspect --object-id 2731173428682078045 --plot outp
 python -m euclid_agn archive build-manifest \
     --config configs/q1.yaml --tile 102160339 --limit 200 \
     --output data/manifests/q1_tile102160339.parquet
+python -m euclid_agn archive availability --sample-tile 102157301
 ```
+
+Downloaded archive files are mirrored under `~/data/euclid/`, keeping the
+archive's own layout (`~/data/euclid/q1/SIR/<tile>/EUC_SIR_W-COMBSPEC_*.fits`).
 
 ## Tests
 

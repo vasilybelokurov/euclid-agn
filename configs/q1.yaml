@@ -8,6 +8,11 @@ archive:
   release: q1
   anon_s3: true
   tap_timeout_s: 900.0
+  # Downloaded archive files are mirrored under this root, keeping the archive's
+  # own relative layout. null means ~/data/euclid.
+  cache_dir: null
+  cache_enabled: true
+  cache_max_gb: null
 
 selection:
   # Data availability only. No host colour, mass, morphology or class.

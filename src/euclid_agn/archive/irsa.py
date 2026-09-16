@@ -32,6 +32,7 @@ import pandas as pd
 from euclid_agn.archive import schema
 from euclid_agn.archive.base import ArchiveBackend, SpectrumLocation
 from euclid_agn.archive.tap import TapService, in_list_clause, quote_columns
+from euclid_agn.io.cache import ArchiveCache
 from euclid_agn.io.sir import open_sir_file
 from euclid_agn.spectra.types import CombinedSpectrum, DitherSpectrum, SourceContext
 
@@ -69,10 +70,12 @@ class IrsaQ1Backend(ArchiveBackend):
         filesystem=None,
         anon: bool = True,
         timeout: float = 900.0,
+        cache: ArchiveCache | None = None,
     ) -> None:
         self.tap = tap or TapService(schema.IRSA_TAP_SYNC, timeout=timeout)
         self._filesystem = filesystem
         self.anon = anon
+        self.cache = cache if cache is not None else ArchiveCache()
 
     # -- filesystem -------------------------------------------------------
     @property
@@ -248,9 +251,17 @@ class IrsaQ1Backend(ArchiveBackend):
 
     # -- spectra ----------------------------------------------------------
     def open_observation(self, location: SpectrumLocation, with_dithers: bool = True):
-        """Read one object's spectra straight from the S3 mirror."""
-        with open_sir_file(location.path, filesystem=self.filesystem, anon=self.anon) as sir:
-            return sir.read_observation_at_hdu(location.hdu, with_dithers=with_dithers)
+        """Read one object's spectra, from the local cache if possible.
+
+        With the cache enabled the whole tile file (~112 MB, 1000 objects) is
+        downloaded once into ``~/data/euclid``; subsequent objects in the same
+        tile are free.  With it disabled only the needed byte ranges are
+        streamed from S3, which is cheaper for a single object and much more
+        expensive for a tile.
+        """
+        with self.cache.open(location.path, self.filesystem) as (target, filesystem):
+            with open_sir_file(target, filesystem=filesystem, anon=self.anon) as sir:
+                return sir.read_observation_at_hdu(location.hdu, with_dithers=with_dithers)
 
     def open_combined_spectrum(self, location: SpectrumLocation) -> CombinedSpectrum:
         return self.open_observation(location, with_dithers=False).combined
@@ -284,8 +295,17 @@ class IrsaQ1Backend(ArchiveBackend):
             },
         )
 
-    def download_file(self, location: SpectrumLocation, destination: str | Path) -> Path:
-        """Copy a whole SIR file locally (for regression fixtures; not for bulk runs)."""
+    def download_file(self, location: SpectrumLocation, destination: str | Path | None = None) -> Path:
+        """Ensure the SIR file backing ``location`` is on local disk.
+
+        With no explicit ``destination`` the file goes to the configured cache
+        (``~/data/euclid`` by default) and its cached path is returned.
+        """
+        if destination is None:
+            path = self.cache.fetch(location.path, self.filesystem, force=False)
+            if path is None:
+                raise RuntimeError("cache is disabled; pass an explicit destination")
+            return path
         destination = Path(destination)
         destination.parent.mkdir(parents=True, exist_ok=True)
         self.filesystem.get(location.path, str(destination))

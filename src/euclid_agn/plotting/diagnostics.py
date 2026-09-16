@@ -101,3 +101,94 @@ def plot_observation(observation, path: str | Path, title: str | None = None) ->
     fig.savefig(path, dpi=140)
     plt.close(fig)
     return path
+
+
+def plot_availability(table, path: str | Path, min_usable_fraction: float = 0.5) -> Path:
+    """Four-panel view of what the Q1 parent sample actually looks like.
+
+    Panels: usable-pixel fraction inside the science window, continuum S/N,
+    effective LSF width, and number of contributing dithers.  These are the
+    axes along which the selection function has to be reported, so this figure
+    is the honest picture of what is available before any AGN search begins.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    usable = np.asarray(table["usable_fraction_science"], dtype=float)
+    snr = np.asarray(table["median_snr_science"], dtype=float)
+    lsf = np.asarray(table["lsf_sigma"], dtype=float)
+    ndith = np.asarray(table["n_dither_hdus"], dtype=float)
+    fittable = usable >= min_usable_fraction
+
+    fig, axes = plt.subplots(2, 2, figsize=(10, 6.5))
+
+    ax = axes[0, 0]
+    ax.hist(usable, bins=np.linspace(0, 1, 41), color="tab:blue")
+    ax.axvline(min_usable_fraction, color="crimson", lw=1.2, ls="--")
+    ax.set_xlabel("usable pixel fraction (12500-18500 $\\AA$)")
+    ax.set_ylabel("spectra")
+    ax.text(
+        0.5,
+        0.92,
+        f"{fittable.mean():.0%} above threshold\n{(usable <= 0).mean():.0%} fully masked",
+        transform=ax.transAxes,
+        ha="center",
+        va="top",
+        fontsize=9,
+    )
+
+    ax = axes[0, 1]
+    finite = np.isfinite(snr) & fittable
+    ax.hist(np.clip(snr[finite], -2, 60), bins=60, color="tab:blue")
+    ax.axvline(3.0, color="crimson", lw=1.2, ls="--")
+    ax.set_xlabel("median continuum S/N per pixel")
+    ax.set_ylabel("spectra")
+    ax.text(
+        0.95,
+        0.92,
+        f"fittable & S/N>3: {(fittable & (snr > 3)).mean():.0%}",
+        transform=ax.transAxes,
+        ha="right",
+        va="top",
+        fontsize=9,
+    )
+
+    ax = axes[1, 0]
+    ax.hist(np.clip(lsf, 0, 80), bins=60, color="tab:blue")
+    ax.axvline(np.nanmedian(lsf), color="crimson", lw=1.2, ls="--")
+    ax.set_xlabel(r"effective LSF $\sigma$ [$\AA$]")
+    ax.set_ylabel("spectra")
+    ax.text(
+        0.95,
+        0.92,
+        f"median {np.nanmedian(lsf):.1f} $\\AA$\n"
+        f"$R\\approx${15000 / (2.355 * np.nanmedian(lsf)):.0f} at 1.5 $\\mu$m",
+        transform=ax.transAxes,
+        ha="right",
+        va="top",
+        fontsize=9,
+    )
+
+    ax = axes[1, 1]
+    values, counts = np.unique(ndith[np.isfinite(ndith)], return_counts=True)
+    ax.bar(values, counts, color="tab:blue")
+    ax.set_xlabel("contributing dithers")
+    ax.set_ylabel("spectra")
+    ax.text(
+        0.95,
+        0.92,
+        f"{(ndith >= 4).mean():.0%} have $\\geq$4 dithers",
+        transform=ax.transAxes,
+        ha="right",
+        va="top",
+        fontsize=9,
+    )
+
+    fig.suptitle(
+        f"Euclid Q1 spectrum availability: {len(usable)} spectra, "
+        f"{len(np.unique(table['tile_id']))} tiles",
+        fontsize=11,
+    )
+    fig.tight_layout()
+    fig.savefig(path, dpi=140)
+    plt.close(fig)
+    return path

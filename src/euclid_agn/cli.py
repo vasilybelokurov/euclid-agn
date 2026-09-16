@@ -74,6 +74,53 @@ def build_manifest(
     typer.echo(json.dumps(manifest_summary(manifest), indent=2))
 
 
+@archive_app.command("availability")
+def availability(
+    config: Path = typer.Option(None, help="YAML config"),
+    field: list[str] = typer.Option(None, help="Field (repeatable); default all four"),
+    sample_tile: list[int] = typer.Option(
+        None, help="Tile id to open and measure pixel-level usability (repeatable)"
+    ),
+    max_objects: int = typer.Option(None, help="Objects per sampled tile"),
+    output: Path = typer.Option(None, help="Write the per-object quality table here"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Report how many Q1 spectra exist and what fraction is usable."""
+    _setup_logging(verbose)
+    import pandas as pd
+
+    from euclid_agn.pipeline.availability import (
+        count_availability,
+        spectrum_quality_table,
+        summarise_quality,
+    )
+    from euclid_agn.pipeline.ingest import make_backend
+
+    cfg = _load_config(config)
+    backend = make_backend(cfg)
+    payload: dict = {}
+    if not sample_tile:
+        counts = count_availability(backend, field or None)
+        payload["catalogue"] = counts.to_dict(orient="records")
+    tables = []
+    for tile in sample_tile or []:
+        locations = backend.query_spectrum_locations(tile_id=tile, limit=1)
+        if not locations:
+            continue
+        path = backend.download_file(locations[0])
+        tables.append(spectrum_quality_table(str(path), max_objects=max_objects))
+    if tables:
+        table = pd.concat(tables, ignore_index=True)
+        payload["pixels"] = summarise_quality(
+            table, cfg.selection.min_usable_pixel_fraction
+        )
+        if output:
+            output.parent.mkdir(parents=True, exist_ok=True)
+            table.to_parquet(output, index=False)
+            payload["table"] = str(output)
+    typer.echo(json.dumps(payload, indent=2, default=float))
+
+
 @archive_app.command("list-tiles")
 def list_tiles(
     field: str = typer.Argument(..., help="EDF-N, EDF-S, EDF-F or LDN1641"),
