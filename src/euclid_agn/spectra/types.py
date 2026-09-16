@@ -6,7 +6,7 @@ Units are validated at the IO boundary, not in inner loops.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import numpy as np
@@ -72,6 +72,19 @@ class Spectrum1D:
     @property
     def n_pixels(self) -> int:
         return len(self.wavelength)
+
+    def with_variance_scale(self, factor: float):
+        """A copy with the variance multiplied by ``factor``.
+
+        This is how the measured per-object noise scale enters the likelihood:
+        the archive variance is left untouched, a derived spectrum carries the
+        corrected one, and ``metadata["variance_scale"]`` records the factor.
+        """
+        if not np.isfinite(factor) or factor <= 0:
+            raise ValueError("variance scale must be a positive finite number")
+        metadata = dict(self.metadata)
+        metadata["variance_scale"] = float(factor) * float(metadata.get("variance_scale", 1.0))
+        return replace(self, variance=self.variance * float(factor), metadata=metadata)
 
     def usable(self, reject: tuple[str, ...] | None = None) -> np.ndarray:
         """Boolean array of pixels admissible to a fit.

@@ -63,12 +63,29 @@ class NoiseAudit:
     clipped_fraction: float
     metadata: dict = field(default_factory=dict)
 
+    @property
+    def variance_scale(self) -> float:
+        """Factor that brings the reported variance up to the observed scatter."""
+        return float(self.residual_sigma**2)
+
+    @property
+    def correlation_inflation(self) -> float:
+        """The part of the inflation due to pixel correlation alone.
+
+        ``inflation == residual_sigma * correlation_inflation``.  Once the
+        variance has been rescaled by :attr:`variance_scale`, this is the factor
+        that still applies to a chi-squared difference.
+        """
+        return float(self.inflation / self.residual_sigma) if self.residual_sigma > 0 else 1.0
+
     def as_row(self) -> dict[str, float | int]:
         row: dict[str, float | int] = {
             "object_id": self.object_id,
             "n_used": self.n_used,
             "residual_sigma": self.residual_sigma,
             "inflation": self.inflation,
+            "variance_scale": self.variance_scale,
+            "correlation_inflation": self.correlation_inflation,
             "clipped_fraction": self.clipped_fraction,
         }
         for lag, value in self.autocorrelation.items():

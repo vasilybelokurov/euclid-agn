@@ -189,3 +189,23 @@ def test_corrected_summary_removes_the_bias():
     assert summary["residual_sigma_corrected"] == pytest.approx(1.2 / 0.96)
     assert summary["acf_lag1_corrected"] == pytest.approx(0.26)
     assert summary["chi2_scale_corrected"] > 1.5
+
+
+def test_inflation_factorises_into_scale_and_correlation():
+    audit = audit_spectrum(correlated(seed=8, width=2.0), object_id=9)
+    assert audit.variance_scale == pytest.approx(audit.residual_sigma**2)
+    assert audit.residual_sigma * audit.correlation_inflation == pytest.approx(audit.inflation)
+    assert audit.correlation_inflation > 1.0
+
+
+def test_rescaling_the_variance_by_the_audit_restores_unit_scatter():
+    """Under-reported variance -> sigma_r ~ 1.41 -> rescaled spectrum -> sigma_r ~ 1."""
+    s = white(seed=12)
+    bad = Spectrum1D(
+        wavelength=s.wavelength, flux=s.flux, variance=s.variance / 2.0, mask=s.mask,
+        quality=s.quality, lsf_sigma=s.lsf_sigma, bin_width=s.bin_width,
+    )
+    first = audit_spectrum(bad, object_id=1)
+    fixed = bad.with_variance_scale(first.variance_scale)
+    second = audit_spectrum(fixed, object_id=1)
+    assert second.residual_sigma == pytest.approx(1.0, rel=0.05)

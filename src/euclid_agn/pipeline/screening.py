@@ -109,19 +109,31 @@ def screen_file(
             if metrics["usable_pixel_fraction"] < config.selection.min_usable_pixel_fraction:
                 continue
             audit = audit_spectrum(combined, object_id=group.object_id)
-            inflation = max(audit.inflation, 1.0) if audit is not None else 1.0
-            hypotheses = hypotheses_for(row, config, combined)
+            # The measured per-object noise scale enters the likelihood here:
+            # the variance is rescaled so that chi-squared means what it says,
+            # and only the pixel-correlation part of the inflation is left to
+            # apply to Delta chi-squared afterwards.
+            if audit is not None and config.screening.noise_scale_free:
+                fitted = combined.with_variance_scale(max(audit.variance_scale, 1.0))
+                inflation = max(audit.correlation_inflation, 1.0)
+            else:
+                fitted = combined
+                inflation = max(audit.inflation, 1.0) if audit is not None else 1.0
+            hypotheses = hypotheses_for(row, config, fitted)
             context = {
                 column: row[column] for column in CONTEXT_COLUMNS if column in row.index
             }
             context["noise_residual_sigma"] = (
                 audit.residual_sigma if audit is not None else float("nan")
             )
+            context["noise_variance_scale"] = float(
+                fitted.metadata.get("variance_scale", 1.0)
+            )
             context["noise_acf_lag1"] = (
                 audit.autocorrelation.get(1, float("nan")) if audit is not None else float("nan")
             )
             table = screen_spectrum(
-                combined,
+                fitted,
                 hypotheses,
                 settings,
                 object_id=group.object_id,

@@ -87,3 +87,14 @@ def test_combined_spectrum_tracks_ndith():
             bin_width=1.0,
             ndith=np.ones(3),
         )
+
+
+def test_variance_scale_returns_a_derived_copy_and_records_the_factor():
+    spectrum = make()
+    scaled = spectrum.with_variance_scale(2.0)
+    assert np.allclose(scaled.variance, 2.0 * spectrum.variance)
+    assert np.allclose(spectrum.variance, 1e-36)  # the original is untouched
+    assert scaled.metadata["variance_scale"] == pytest.approx(2.0)
+    assert scaled.with_variance_scale(1.5).metadata["variance_scale"] == pytest.approx(3.0)
+    with pytest.raises(ValueError):
+        spectrum.with_variance_scale(0.0)

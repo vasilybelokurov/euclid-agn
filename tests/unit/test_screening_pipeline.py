@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -170,3 +171,18 @@ def test_screen_manifest_rejects_an_empty_selection(archive, tmp_path):
         screen_manifest(
             fast_config(), manifest_path, tmp_path / "x.parquet", object_ids=[999999]
         )
+
+
+def test_screen_file_puts_the_noise_scale_into_the_likelihood(archive):
+    """With noise_scale_free the variance is rescaled before fitting."""
+    path, manifest, _ = archive
+    on = screen_file(str(path), manifest, fast_config())
+    off_config = fast_config()
+    off_config.screening.noise_scale_free = False
+    off = screen_file(str(path), manifest, off_config)
+    assert "noise_variance_scale" in on.columns
+    assert (off["noise_variance_scale"] == 1.0).all()
+    # Rescaling the variance by s^2 divides every chi-squared by s^2.
+    joined = on.merge(off, on="object_id", suffixes=("_on", "_off"))
+    scale = joined["noise_variance_scale_on"]
+    assert np.allclose(joined["chi2_m0_on"] * scale, joined["chi2_m0_off"], rtol=1e-6)
