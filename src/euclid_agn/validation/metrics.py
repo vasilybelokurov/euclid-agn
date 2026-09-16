@@ -124,11 +124,13 @@ def blind_redshift_experiment(
     settings = settings or ScreenSettings(n_refine=0)
     hypotheses = blind_grid(step_kms=step_kms)
     wanted = set(reference["object_id"].astype("int64"))
-    reference_rows = (
-        {int(r["object_id"]): r for _, r in reference.iterrows()}
-        if (include_catalogue_hypotheses or prior_column)
-        else {}
-    )
+    # Keys come from an int64 index, never from a row value: iterrows upcasts a
+    # mixed-dtype row to float64 and a 19-digit MER object id does not survive
+    # the round trip (2708573889636910920 came back as a different integer).
+    reference_rows: dict = {}
+    if include_catalogue_hypotheses or prior_column:
+        indexed = reference.set_index(reference["object_id"].astype("int64"))
+        reference_rows = {int(key): row for key, row in indexed.iterrows()}
     rows: list[dict] = []
     for path in files:
         with open_sir_file(str(path)) as sir:

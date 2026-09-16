@@ -18,12 +18,24 @@ can be reported against them.
 | M1 Q1 archive layer | done (IRSA backend; ESA backend declared, not implemented) |
 | M2 simulator and model primitives | done — line catalogue, LSF, simulator, constrained linear solver, B-spline continuum, non-parametric NLR, BLR components, M0/M1 forward model |
 | M3 Stage-1 fitter | done — hypotheses, matched-filter scan (0.44 ms/hypothesis), full M0/M1 refinement, three degeneracy guards, pilot run on real Q1 spectra |
-| M4 EDF-N validation | not started |
+| M4 EDF-N validation | started — SPE and DESI reference ingestion, blind redshift recovery, 6 defects found and fixed; on DESI galaxies with detectable Hα the redshift is recovered 60–69 % (Euclid SPE: 23 %). Injection/recovery and the empirical null still to do. |
 | M5 joint dither fitting | not started |
 | M6 Q1 production run | not started |
 
 No AGN detection claim is possible yet: nothing has been fitted, so nothing has
 been validated.
+
+## Does it work? (measured 2026-09-17)
+
+On 114 DESI galaxies at 0.9 < z < 1.8 in EDF-N — redshifts certain, Hα in the
+grism — the pipeline, given no redshift, recovers DESI's within 1000 km/s for
+**60 % of objects where Euclid detects Hα at Δχ² > 25 and 69 % at Δχ² > 50**
+(blind scan + fixed-ratio templates + PHZ prior). Euclid's own SPE redshift
+agrees with DESI for 23 % of the same objects. Where Hα is not detectable the
+pipeline agrees 3 % of the time, as it should. `plots/desi_redshift_recovery.png`.
+
+Getting there found six defects, each verified on real spectra and each with a
+regression test; see `JOURNAL.md` sessions 6–7.
 
 ## Q1 spectra availability (measured 2026-09-16)
 

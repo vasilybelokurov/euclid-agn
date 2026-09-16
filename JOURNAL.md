@@ -932,3 +932,49 @@ production configuration exist to break.  That test is running.
 - One object (2684915737657679255) shows a dominant asymmetric ~100 Å feature
   that is a broad-line candidate mislabelled by SPE as a z = 0.5 galaxy; first
   thing to look at when dither-level fitting exists.
+
+### Closing the single-line ambiguity: the PHZ prior
+
+On the same 114 Hα-window DESI galaxies, the photometric redshift is good —
+|Δz|/(1+z) median 0.026, 87 % within 0.1 — and **Euclid's own SPE redshift
+agrees with DESI for only 23 % of them** (44 % at SPE probability > 0.99).
+
+Adding SPE/PHZ as *hypotheses* alone lifted Hα-detectable agreement 25 → 30 %:
+a hypothesis only helps if it also wins.  PHZ now enters the *ranking* as a
+soft prior, −2 ln of a Gaussian (σ = 0.05 in dz/(1+z)) / uniform mixture with a
+13 % outlier component.  The mixture caps the penalty near 11 in Δχ² units —
+the honest weight of a photometric redshift: it settles moderate ambiguities and
+cannot overturn a strong data preference.  A first version with an arbitrary cap
+of 40 was replaced when a synthetic test showed the cap doing the arguing.
+
+That test also exposed a template-coverage gap: every Hα template carried
+[N II] ≥ 0.25 Hα, so a metal-poor ELG's Hα was better explained by a
+single-line Pa-β identification.  `halpha_elg` ([N II]/Hα 0.07) added.
+
+And a precision bug: `iterrows` upcasts a mixed row to float64, and a 19-digit
+MER object id does not survive `float → int` (2708573889636910920 came back as
+a different integer).  Lookups now key on the int64 index; regression test added.
+
+**Result** (`plots/desi_redshift_recovery.png`):
+
+| configuration | Hα Δχ² > 25 (n = 57) | Hα Δχ² > 50 (n = 32) | Hα not detectable (n = 36) |
+|---|---:|---:|---:|
+| blind scan + templates | 26 % | 41 % | 3 % |
+| + PHZ prior | 53 % | 62 % | 6 % |
+| + PHZ prior + SPE/PHZ hypotheses | **60 %** | **69 %** | 3 % |
+| *Euclid SPE itself vs DESI* | *23 %* | | |
+
+Agreements sit on the 1:1 line at |Δv| ≈ 100 km/s; the transition to
+agreement happens at Hα Δχ² ≈ 20.  Where Hα is not detectable the pipeline
+agrees 3 % of the time — as it must, there is nothing to identify.
+
+This is the production identification configuration (`rank_by="template"`,
+`phz_prior_sigma=0.05`, catalogue hypotheses on).  The pure-blind statistic is
+still computed and recorded on every row, and the winner's origin says whether
+the prior decided it.
+
+Caveats stated plainly: n = 32–57; one field; ELGs only; the prior's
+parameters were read off this same DESI sample (σ and outlier fraction), so
+the numbers are optimistic by an amount a held-out sample will have to measure.
+
+Tests: **277 offline**.

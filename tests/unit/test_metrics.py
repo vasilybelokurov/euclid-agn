@@ -115,3 +115,24 @@ def test_experiment_skips_objects_with_no_reference(archive):
 
 def test_catastrophic_fraction_of_nothing_is_nan():
     assert np.isnan(catastrophic_fraction(pd.DataFrame()))
+
+
+def test_nineteen_digit_object_ids_survive_the_reference_lookup(archive):
+    """float64 cannot hold a MER object id; the lookup must key on int64."""
+    big = 2708573889636910920
+    assert int(float(big)) != big  # the trap
+    from euclid_agn.io.sir import open_sir_file
+    from euclid_agn.validation.simulator import SpectrumTruth, simulate_observation, write_sir_file
+    import tempfile, pathlib
+
+    with tempfile.TemporaryDirectory() as d:
+        path = write_sir_file(
+            pathlib.Path(d) / "big.fits",
+            [simulate_observation(SpectrumTruth(z=1.2, lines=NARROW, object_id=big, seed=9, noise_flux=1e-19))],
+        )
+        reference = pd.DataFrame({"object_id": [big], "spe_gal_z": [1.2], "phz_mode_1": [1.22], "spe_best_snr": [10.0]})
+        result = blind_redshift_experiment(
+            [str(path)], reference, settings=SETTINGS, step_kms=600.0, prior_column="phz_mode_1"
+        )
+        assert len(result.compared) == 1
+        assert int(result.compared["object_id"].iloc[0]) == big

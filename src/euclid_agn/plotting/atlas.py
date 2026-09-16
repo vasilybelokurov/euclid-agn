@@ -343,7 +343,15 @@ def build_atlas(
     return created
 
 
-def plot_redshift_agreement(compared: pd.DataFrame, path: str | Path) -> Path:
+def plot_redshift_agreement(
+    compared: pd.DataFrame,
+    path: str | Path,
+    reference_column: str = "spe_gal_z",
+    reference_label: str = "SPE galaxy redshift",
+    strength_column: str = "spe_best_snr",
+    strength_label: str = "SPE best-line S/N",
+    title: str | None = None,
+) -> Path:
     """Blind-scan redshift against the SPE redshift, and where it fails.
 
     The comparison is between two measurements of the same photons, so
@@ -353,11 +361,11 @@ def plot_redshift_agreement(compared: pd.DataFrame, path: str | Path) -> Path:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     z_blind = np.asarray(compared["z"], dtype=float)
-    z_reference = np.asarray(compared["spe_gal_z"], dtype=float)
+    z_reference = np.asarray(compared[reference_column], dtype=float)
     delta_v = np.asarray(compared["delta_v_kms"], dtype=float)
     snr = (
-        np.asarray(compared["spe_best_snr"], dtype=float)
-        if "spe_best_snr" in compared
+        np.asarray(compared[strength_column], dtype=float)
+        if strength_column in compared
         else np.full(z_blind.size, np.nan)
     )
     agrees = np.asarray(compared["agrees"], dtype=bool)
@@ -368,8 +376,8 @@ def plot_redshift_agreement(compared: pd.DataFrame, path: str | Path) -> Path:
     ax.plot([0, 6], [0, 6], color="0.6", lw=0.9, ls="--")
     ax.scatter(z_reference[~agrees], z_blind[~agrees], s=14, color="0.7", label="disagrees")
     ax.scatter(z_reference[agrees], z_blind[agrees], s=16, color="tab:blue", label="agrees")
-    ax.set_xlabel("SPE galaxy redshift")
-    ax.set_ylabel("blind-scan redshift")
+    ax.set_xlabel(reference_label)
+    ax.set_ylabel("pipeline redshift")
     ax.set_xlim(0, 6)
     ax.set_ylim(0, 6)
     ax.legend(fontsize=8, loc="upper left")
@@ -380,8 +388,8 @@ def plot_redshift_agreement(compared: pd.DataFrame, path: str | Path) -> Path:
     ax.scatter(snr[finite], np.clip(delta_v[finite], -2e5, 2e5), s=16, color="tab:blue")
     ax.set_xscale("log")
     ax.set_yscale("symlog", linthresh=1000)
-    ax.set_xlabel("SPE best-line S/N")
-    ax.set_ylabel(r"$\Delta v$ (blind $-$ SPE) [km s$^{-1}$]")
+    ax.set_xlabel(strength_label)
+    ax.set_ylabel(r"$\Delta v$ (pipeline $-$ reference) [km s$^{-1}$]")
     ax.text(
         0.03,
         0.05,
@@ -402,12 +410,11 @@ def plot_redshift_agreement(compared: pd.DataFrame, path: str | Path) -> Path:
         for x, (fraction, count) in enumerate(zip(fractions.values, counts.values, strict=True)):
             ax.text(x, fraction + 0.02, f"n={count}", ha="center", fontsize=8)
         ax.set_ylim(0, 1.15)
-        ax.set_ylabel("fraction agreeing with SPE")
-        ax.set_xlabel("SPE best-line S/N")
+        ax.set_ylabel("fraction agreeing with reference")
+        ax.set_xlabel(strength_label)
 
     fig.suptitle(
-        f"Blind redshift recovery on {len(compared)} real Q1 spectra "
-        "(no catalogue redshift used as input)",
+        title or f"Redshift recovery on {len(compared)} real Q1 spectra",
         fontsize=11,
     )
     fig.tight_layout()

@@ -15,6 +15,7 @@ import logging
 from collections.abc import Sequence
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from euclid_agn.config import Config
@@ -132,6 +133,8 @@ def screen_file(
             context["noise_acf_lag1"] = (
                 audit.autocorrelation.get(1, float("nan")) if audit is not None else float("nan")
             )
+            phz = row.get("phz_mode_1") if hasattr(row, "get") else None
+            z_prior = float(phz) if phz is not None and np.isfinite(float(phz)) else None
             table = screen_spectrum(
                 fitted,
                 hypotheses,
@@ -139,6 +142,7 @@ def screen_file(
                 object_id=group.object_id,
                 noise_inflation=inflation,
                 context=context,
+                z_prior=z_prior,
             )
             if not table.empty:
                 out.append(table.head(rows_per_object))
