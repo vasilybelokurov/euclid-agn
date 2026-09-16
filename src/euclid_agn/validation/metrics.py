@@ -57,11 +57,10 @@ def blind_best_redshift(
     scan = quick_scan(spectrum, hypotheses, settings)
     if scan.empty:
         return None
-    scan = scan.assign(delta_chi2_total=scan["delta_chi2_narrow"] + scan["delta_chi2_broad"])
-    best = scan.loc[scan["delta_chi2_total"].idxmax()]
+    best = scan.loc[scan["delta_chi2_penalised"].idxmax()]
     runner_up = scan[scan["system"] != best["system"]]
     margin = (
-        float(best["delta_chi2_total"] - runner_up["delta_chi2_total"].max())
+        float(best["delta_chi2_penalised"] - runner_up["delta_chi2_penalised"].max())
         if not runner_up.empty
         else float("inf")
     )
@@ -72,6 +71,8 @@ def blind_best_redshift(
         "delta_chi2_narrow": float(best["delta_chi2_narrow"]),
         "delta_chi2_broad": float(best["delta_chi2_broad"]),
         "delta_chi2_total": float(best["delta_chi2_total"]),
+        "delta_chi2_penalised": float(best["delta_chi2_penalised"]),
+        "n_components": int(best["n_components"]),
         "delta_chi2_over_other_system": margin,
     }
 

@@ -46,6 +46,32 @@ case.  ``rank_alternatives`` records how much better the winner is than the best
 hypothesis of a *different* line system, which is the honest measure of how
 ambiguous an identification is.
 
+Comparing line systems with different numbers of lines
+------------------------------------------------------
+The line systems do not have the same number of members, and every visible
+member is a free non-negative amplitude.  Ranking hypotheses on raw Delta
+chi-squared therefore hands the win to whichever system has the most lines, and
+it does so overwhelmingly: in the first blind-recovery experiment on 659 real
+spectra, 75 per cent of objects were assigned ``hbeta_oiii`` (6.6 visible lines
+on average) and the agreement with Euclid's own SPE redshift was 2.9 per cent.
+
+The size of the bias was measured rather than assumed.  Taking the best Delta
+chi-squared *within each system* over a full blind scan of 150 real spectra -
+most of which have no strong lines, so this is close to a null - the median of
+that per-object maximum grows linearly with the number of free components ``k``::
+
+    median max Delta chi2  =  7.0 + 6.6 k       (k = 1 ... 8)
+
+The slope is far larger than the naive AIC penalty of 2 per parameter because
+the statistic is a *maximum* over ~900 hypotheses, and extreme values of a
+k-component statistic grow with k.  ``ScreenSettings.component_penalty``
+defaults to that measured slope, and ranking uses
+
+    delta_chi2_penalised = delta_chi2_total - component_penalty * n_components
+
+Raw and penalised values are both recorded.
+
+
 How wide a broad line can be and still be measurable
 ----------------------------------------------------
 A very broad Gaussian is degenerate with continuum curvature, and the first
@@ -125,6 +151,10 @@ class ScreenSettings:
     #: Minimum fraction of a broad line's flux that must fall on covered
     #: pixels.  Guards against edge artefacts absorbed by a truncated wing.
     min_broad_containment: float = 0.8
+    #: Penalty per free line amplitude when comparing hypotheses, in units of
+    #: chi-squared.  The default is the measured slope of the null maximum
+    #: against the number of components; see the module docstring.
+    component_penalty: float = 6.6
     narrow_velocity_half_width_kms: float = 1000.0
     narrow_velocity_step_kms: float = 250.0
     narrow_smoothness: float = 1.0
@@ -414,9 +444,17 @@ def quick_scan(
                     "broad_line": best.get("line", ""),
                     "broad_continuum_orthogonality": best["orthogonality"],
                     "broad_sigma_max_identifiable_kms": sigma_max,
+                    "n_components": int(columns.shape[1])
+                    + (1 if best["delta_chi2_broad"] > 0 else 0),
                 }
             )
-    return pd.DataFrame(rows)
+    table = pd.DataFrame(rows)
+    if not table.empty:
+        table["delta_chi2_total"] = table["delta_chi2_narrow"] + table["delta_chi2_broad"]
+        table["delta_chi2_penalised"] = (
+            table["delta_chi2_total"] - settings.component_penalty * table["n_components"]
+        )
+    return table
 
 
 def refine(
@@ -493,10 +531,12 @@ def rank_alternatives(scan: pd.DataFrame, winner) -> dict[str, float]:
             "best_alternative_system": "",
             "best_alternative_z": float("nan"),
         }
-    best = others.loc[others["delta_chi2_total"].idxmax()]
+    best = others.loc[others["delta_chi2_penalised"].idxmax()]
     z_w, z_a = float(winner["z"]), float(best["z"])
     return {
-        "delta_chi2_over_other_system": float(winner["delta_chi2_total"] - best["delta_chi2_total"]),
+        "delta_chi2_over_other_system": float(
+            winner["delta_chi2_penalised"] - best["delta_chi2_penalised"]
+        ),
         "velocity_to_best_alternative_kms": float(
             C_KMS * abs(z_w - z_a) / (1.0 + 0.5 * (z_w + z_a))
         ),
@@ -513,7 +553,7 @@ def select_for_refinement(scan: pd.DataFrame, n_refine: int) -> pd.DataFrame:
     """
     if scan.empty or n_refine <= 0:
         return scan.head(0)
-    by_total = scan.nlargest(n_refine, "delta_chi2_total")
+    by_total = scan.nlargest(n_refine, "delta_chi2_penalised")
     by_broad = scan.nlargest(n_refine, "delta_chi2_broad")
     selected = pd.concat([by_total, by_broad]).drop_duplicates(subset=["z", "system"])
     selected = selected.assign(
@@ -524,7 +564,7 @@ def select_for_refinement(scan: pd.DataFrame, n_refine: int) -> pd.DataFrame:
             for index in selected.index
         ]
     )
-    return selected.sort_values("delta_chi2_total", ascending=False)
+    return selected.sort_values("delta_chi2_penalised", ascending=False)
 
 
 def screen_spectrum(
@@ -543,9 +583,7 @@ def screen_spectrum(
     scan = quick_scan(spectrum, hypotheses, settings)
     if scan.empty:
         return pd.DataFrame()
-    scan = scan.assign(
-        delta_chi2_total=scan["delta_chi2_narrow"] + scan["delta_chi2_broad"]
-    ).reset_index(drop=True)
+    scan = scan.reset_index(drop=True)
     selected = select_for_refinement(scan, settings.n_refine)
 
     quality = spectrum.quality_metrics()
@@ -571,6 +609,8 @@ def screen_spectrum(
             "quick_delta_chi2_narrow": candidate["delta_chi2_narrow"],
             "quick_delta_chi2_broad": candidate["delta_chi2_broad"],
             "quick_delta_chi2_total": candidate["delta_chi2_total"],
+            "quick_delta_chi2_penalised": candidate["delta_chi2_penalised"],
+            "n_components": candidate["n_components"],
             "noise_inflation": noise_inflation,
             "delta_chi2_effective": float(candidate["delta_chi2_broad"]) / noise_inflation**2,
             "broad_continuum_orthogonality": candidate["broad_continuum_orthogonality"],

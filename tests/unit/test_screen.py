@@ -214,9 +214,11 @@ def test_selection_keeps_both_rankings():
             # broad gain alone. Both must survive selection.
             "delta_chi2_narrow": [400.0, 200.0, 10.0],
             "delta_chi2_broad": [200.0, 340.0, 20.0],
+            "n_components": [7, 3, 3],
         }
     )
     scan["delta_chi2_total"] = scan.delta_chi2_narrow + scan.delta_chi2_broad
+    scan["delta_chi2_penalised"] = scan.delta_chi2_total - 6.6 * scan.n_components
     selected = select_for_refinement(scan, n_refine=1)
     assert set(selected["system"]) == {"halpha_complex", "paschen_beta"}
     assert set(selected["selected_by"]) == {"total", "broad"}
@@ -230,6 +232,7 @@ def test_ambiguity_is_reported():
             "z": [1.2, 0.13],
             "system": ["halpha_complex", "paschen_beta"],
             "delta_chi2_total": [500.0, 480.0],
+            "delta_chi2_penalised": [500.0, 480.0],
         }
     )
     info = rank_alternatives(scan, scan.iloc[0])
@@ -239,9 +242,23 @@ def test_ambiguity_is_reported():
 
 
 def test_screen_reports_the_true_redshift_for_a_broad_line_object():
+    """A type-1 host with its full narrow complex must be identified correctly.
+
+    With only H-alpha and [N II] injected the answer is genuinely ambiguous: a
+    lone broad feature plus two weak narrow lines is as well explained by Mg II
+    at z = 4.16, and after the per-component penalty the smaller system wins.
+    That ambiguity is a property of the grism, so the test injects the narrow
+    complex a real H-alpha emitter would show.
+    """
     from euclid_agn.fit.hypotheses import blind_grid
 
-    spectrum = make([*NARROW, LineTruth("Halpha", 2.0e-15, 2500.0, broad=True)], seed=0)
+    full_narrow = [
+        *NARROW,
+        LineTruth("NII6548", 4.0e-17, 150.0),
+        LineTruth("SII6716", 8.0e-17, 150.0),
+        LineTruth("SII6731", 6.0e-17, 150.0),
+    ]
+    spectrum = make([*full_narrow, LineTruth("Halpha", 2.0e-15, 2500.0, broad=True)], seed=0)
     table = screen_spectrum(
         spectrum,
         blind_grid(0.0, 5.7, step_kms=500.0),
