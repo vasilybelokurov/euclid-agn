@@ -17,7 +17,7 @@ can be reported against them.
 | M0 package foundation | done |
 | M1 Q1 archive layer | done (IRSA backend; ESA backend declared, not implemented) |
 | M2 simulator and model primitives | done — line catalogue, LSF, simulator, constrained linear solver, B-spline continuum, non-parametric NLR, BLR components, M0/M1 forward model |
-| M3 Stage-1 fitter | not started |
+| M3 Stage-1 fitter | done — hypotheses, matched-filter scan (0.44 ms/hypothesis), full M0/M1 refinement, three degeneracy guards, pilot run on real Q1 spectra |
 | M4 EDF-N validation | not started |
 | M5 joint dither fitting | not started |
 | M6 Q1 production run | not started |
@@ -86,6 +86,12 @@ recorded in `JOURNAL.md` with the command used.
   6564.39 Å from 400 Q1 SPE detections; vacuum 6564.61, air 6562.80).
 - The four Q1 field cones select 352 tiles, exactly the number of distinct Q1
   tiles, so they partition the release.
+- **Much of the BLR width range is degenerate with the continuum.** At 12 knots
+  a σ = 5000 km/s line keeps only 13 % of its norm once the continuum is
+  projected out; widths that fail this test are not scanned, and the surviving
+  orthogonality is recorded per candidate.
+- **Hα at z = 1.2 and Pa-β at z = 0.126 are 1.15 pixels apart**, so redshift must
+  be chosen on all the line evidence, not on broad-line gain.
 - **A naive Δχ² overstates the evidence by a factor of about 2.** Measured on
   934 real spectra: reported variances are too small by ~1.45× and adjacent
   pixels are correlated at ρ₁ = +0.18 (bias-corrected against a white-noise

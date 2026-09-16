@@ -530,3 +530,144 @@ was written by SIR 5.0.5 rather than 5.0.6, holds 5 object groups against
 2. `fit/screen.py`: Stage-1 scan over the small non-linear space, carrying the
    per-spectrum noise inflation into the recorded statistics.
 3. First Stage-1 run on a curated EDF-N subset with DESI labels held back.
+
+---
+
+## 2026-09-16 — session 4: M3 Stage-1 screening, and what real spectra did to it
+
+### Architecture: Stage 1 is itself two tiers
+
+Cost decides the design.  Q1 has 4.3 million spectra and a blind scan at the
+instrumental resolution puts ~1900 hypotheses on each.  Running the alternating
+narrow-line fit at every hypothesis is impossible at that scale.
+
+**Tier A, matched filter.**  The continuum basis does not depend on redshift, so
+it is whitened and orthonormalised once per spectrum; each hypothesis is then a
+few dot products after projecting its line basis orthogonal to the continuum
+span.  Measured cost: **0.44 ms per hypothesis-row**, flat in the number of
+hypotheses.
+
+| blind step | hypotheses | time per spectrum | all Q1 |
+|---:|---:|---:|---:|
+| 2000 km/s | 282 | 0.13 s | ~150 core-hours |
+| 1000 km/s | 561 | 0.25 s | ~300 core-hours |
+| 300 km/s | 1868 | 0.81 s | ~970 core-hours |
+
+Restricting to the ~3.4 million fittable spectra, a 300 km/s blind scan is about
+770 core-hours — a day on 32 cores.  Feasible, so the blind scan stays.
+
+**Tier B, full fit.**  Only the best few hypotheses get the M0/M1 treatment with
+the non-parametric profile and bounded solves.
+
+### Three failure modes, each found by running on real data
+
+None of these came from reasoning about the method; each came from looking at
+what the pipeline actually did to Q1 spectra.
+
+**1. Ranking by broad-line gain alone gets the redshift wrong.**
+H-alpha at z = 1.2 falls at 14442 Å; Pa-beta at z = 0.1264 falls at 14458 Å.
+That is **1.15 pixels**.  On a synthetic object with a broad H-alpha, ranking by
+broad gain put a single-line Pa-beta identification of the same feature in the
+top five and the true redshift nowhere.  Ranking by narrow + broad evidence put
+z = 1.2009 first, because the H-alpha system contributes six lines and the
+Pa-beta system one.
+
+Fix: the redshift is chosen on all the line evidence; the broad gain remains the
+AGN statistic.  Both rankings are refined — the union of best-by-total and
+best-by-broad — so an object whose only signal is a BLR is not discarded by a
+rule designed for the opposite case.  Each row now records how much better the
+winner is than the best hypothesis of a *different* line system.
+
+**2. Every candidate railed at the widest width in the grid.**
+The first real-data pilot (120 spectra) returned a top-eight in which every
+broad FWHM was 5887 or 11774 km/s — the two largest in the grid — and the median
+spectrum "preferred" a broad component, at an effective Δχ² of 6.2.
+
+A broad Gaussian is degenerate with continuum curvature, and the degeneracy is
+measurable: project the whitened broad basis vector orthogonal to the continuum
+span and see what fraction of its norm survives.  On the real Q1 grid
+(448 fitted pixels):
+
+| σ (FWHM) km/s | 6 knots | 12 knots | 25 knots | 50 knots |
+|---|---|---|---|---|
+| 300 (706) | 0.95 | 0.92 | 0.86 | 0.73 |
+| 600 (1413) | 0.93 | 0.86 | 0.78 | 0.56 |
+| 1200 (2826) | 0.86 | 0.74 | 0.58 | 0.23 |
+| 2500 (5887) | 0.70 | 0.47 | 0.21 | 0.01 |
+| 5000 (11774) | 0.42 | **0.13** | 0.01 | 0.00 |
+| 8000 (18839) | 0.19 | 0.02 | 0.00 | 0.00 |
+
+At the working continuum flexibility of 12 knots, a σ = 5000 km/s line keeps
+13 % of its norm; the fit is then driven by a small orthogonal remnant, which is
+precisely how continuum mismatch becomes a "broad-line detection".  **A large
+part of the classical BLR width range is intrinsically degenerate with the
+continuum in the Euclid red grism.**  That is a property of the data.
+
+Fix: widths failing `min_broad_orthogonality` are not scanned, and the
+orthogonality of the best surviving width is recorded on every row as a
+selection-function axis.  The median effective statistic over the same 117
+spectra fell from 6.2 to 1.6.
+
+**3. The best surviving candidate was an edge artefact.**
+Plotting it settled the matter immediately: object 2726095024677601371, nominal
+Δχ² = 214, was a broad profile centred at **18200 Å** — on the red edge, half of
+it off the detector — while the M0 residuals were ±10σ across the whole range.
+
+Fix: a broad component must now have at least 80 % of its flux on covered
+pixels, and every row carries the reduced chi-squared of M0 so that a Δχ² drawn
+from a failed continuum model is visible rather than implicit.
+
+### An independent consistency check
+
+After the guards, the median reduced chi-squared of M0 over real spectra is
+**2.1**.  The noise audit of session 3, which knows nothing about this fit,
+measured a chi-squared inflation of **η² = 1.98** from residual scatter and
+pixel-to-pixel correlation alone.  The agreement says the continuum-plus-narrow
+model is *adequate*, and that the apparent misfit is the reported variances
+being too small rather than the model being wrong.  That is reassuring for the
+decision not to start with a stellar-population continuum.
+
+### Pilot results after all three guards
+
+120 real spectra from two EDF-N tiles, blind scan at 600 km/s:
+
+| | all 117 rows | the 80.3 % whose continuum model is acceptable |
+|---|---|---|
+| median effective Δχ² | 1.6 | 1.2 |
+| 90th percentile | 17.6 | 9.3 |
+| 95th percentile | 29.1 | 21.3 |
+| 99th percentile | 71.1 | 57.2 |
+
+These are essentially random spectra, most of which contain no AGN, so this
+distribution is close to an empirical null — and it is wide.  A nominal
+Δχ² = 25 sits near the 95th percentile of *unselected* spectra.  Any threshold
+has to come from this distribution and from injection/recovery, not from a
+chi-squared table.  Nothing here is called a detection.
+
+### Files added
+
+```
+src/euclid_agn/fit/hypotheses.py      redshift hypotheses, four origins
+src/euclid_agn/fit/screen.py          two-tier Stage 1
+src/euclid_agn/pipeline/screening.py  manifest -> screening table
+src/euclid_agn/pipeline/noise.py      (session 3) noise audit
+tests/unit/test_hypotheses.py, test_screen.py, test_screening_pipeline.py
+outputs/screen_pilot*.parquet, outputs/candidate_*.png
+```
+
+### Test results
+
+- Offline suite: **221 passed, 5 deselected**, 3.7 s.
+
+### Next actions
+
+1. M4 validation: injection and recovery into real control spectra, and the
+   empirical null.  The pilot distribution above is the first sketch of the
+   null; it needs the proper construction with off-line redshifts, forbidden
+   broad components and contamination-rich controls.
+2. Ingest DESI truth from `~/data/euclid/with_desi/desi_euclid_q1_galaxies.fits`
+   and partition it into development, validation and a blind holdout **before**
+   any threshold is chosen.
+3. Report completeness against the measured degeneracy axes — broad width,
+   continuum orthogonality, effective LSF, usable fraction, dither count —
+   rather than a single flux-completeness curve.
