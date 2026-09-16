@@ -98,3 +98,15 @@ def test_rank_by_can_fall_back_to_the_penalised_statistic():
     b = quick_scan(spectrum, hyp, ScreenSettings(n_refine=0, rank_by="penalised"))
     assert a["rank_statistic"].iloc[0] == pytest.approx(a["delta_chi2_identification"].iloc[0])
     assert b["rank_statistic"].iloc[0] == pytest.approx(b["delta_chi2_penalised"].iloc[0])
+
+
+def test_template_lines_on_the_edge_are_dropped():
+    """The Pa-gamma-on-the-red-edge failure from real data."""
+    projected = prepare(make([], 0.688), SETTINGS)
+    template = [t for t in templates_for("helium_paschen_gamma") if t.name == "paschen_only"][0]
+    # At z=0.688 Pa-gamma sits at 18468 A, within 3 pixels of the edge.
+    strict, n_strict = template_column(projected, template, 0.688, 200.0, min_containment=0.8)
+    loose, n_loose = template_column(projected, template, 0.688, 200.0, min_containment=0.0)
+    assert n_loose > n_strict
+    edge = projected.wavelength > 18400
+    assert np.sum(strict[edge]) < 0.1 * np.sum(loose[edge])

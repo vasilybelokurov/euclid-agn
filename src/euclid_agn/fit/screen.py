@@ -449,7 +449,11 @@ def quick_scan(
             template_best_column = None
             for template in templates_for(system):
                 column, n_lines = template_column(
-                    projected, template, hypothesis.z, settings.narrow_sigma_kms
+                    projected,
+                    template,
+                    hypothesis.z,
+                    settings.narrow_sigma_kms,
+                    min_containment=settings.min_broad_containment,
                 )
                 if column is None:
                     continue

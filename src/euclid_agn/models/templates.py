@@ -136,13 +136,22 @@ def templates_for(system: LineSystem | str) -> tuple[EmissionTemplate, ...]:
 
 
 def template_column(
-    projected, template: EmissionTemplate, z: float, sigma_kms: float
+    projected,
+    template: EmissionTemplate,
+    z: float,
+    sigma_kms: float,
+    min_containment: float = 0.8,
 ) -> tuple[np.ndarray | None, int]:
     """One column: the template's visible lines at their fixed ratios.
 
     Returns ``(column, n_lines)``; ``column`` is ``None`` if nothing is visible.
     Each line is a unit-flux LSF-broadened profile scaled by its ratio, so the
     single fitted amplitude is the flux of the reference line.
+
+    A line whose profile is less than ``min_containment`` on covered pixels is
+    left out: a template line on the very edge of the grid fits the edge
+    artefact rather than the sky.  VERIFIED on a real Q1 spectrum where the
+    winning template placed Pa-gamma on the red-edge spike at 18450 A.
     """
     from euclid_agn.spectra.lsf import effective_sigma, sigma_kms_to_angstrom
 
@@ -151,8 +160,15 @@ def template_column(
     if not visible:
         return None, 0
     column = np.zeros(wavelength.size)
+    n_used = 0
     for name, ratio in visible.items():
         centre = BY_NAME[name].rest * (1.0 + z)
         width = effective_sigma(sigma_kms_to_angstrom(sigma_kms, centre), projected.lsf_sigma)
-        column += ratio * projected.line_column(centre, width)
-    return column, len(visible)
+        line = projected.line_column(centre, width)
+        if min_containment > 0.0 and float(np.sum(line * projected.widths)) < min_containment:
+            continue
+        column += ratio * line
+        n_used += 1
+    if n_used == 0:
+        return None, 0
+    return column, n_used
