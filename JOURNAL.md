@@ -711,3 +711,98 @@ what injection/recovery has to quantify.
 Reading the individual fits remains the fastest way to find a failure mode: the
 edge-artefact candidate of session 4 was obvious in one figure and invisible in
 the numbers.
+
+---
+
+## 2026-09-16 — session 6: do the fits work? Blind redshift recovery against SPE
+
+### The question and the test
+
+"Do we have objects with reliable emission lines and useful fits?"  Answered
+with an experiment rather than an opinion: give the pipeline **no catalogue
+information**, let it scan redshift blind, and compare where it lands with
+Euclid's own SPE redshift.  Agreement needs IO, masking, continuum, line list,
+LSF, matched filter and ranking all to be right at once, against an independent
+measurement of the same photons.  It says nothing about AGN; it says whether
+lines are real and fits are useful.
+
+Data in hand: **146 MB — 8 SIR files, 8 tiles, 1373 objects** (0.03 % of Q1).
+Of these, 675 have an SPE rank-0 galaxy redshift and 93 have an SPE line at
+S/N > 5: Hα 23, [O III] 5008 20, [S II] 6718 16, Hβ 7, [S III], Paschen.
+
+### First result: 2.9 % agreement, and why
+
+659 objects compared, tolerance 1000 km/s: **2.9 % agree** (16 % of the 31 with
+an SPE line at S/N > 10).  A failure, but a diagnostic one.  75 % of objects were
+assigned `hbeta_oiii`, the system with the most members (6.6 visible on
+average).  Raw Δχ² with free non-negative amplitudes has no penalty for the
+number of components, so the largest system wins.
+
+The size of the bias was measured on 150 real spectra (best statistic within
+each system over the full blind scan; most objects have no strong lines, so
+this is close to a null):
+
+```
+median per-object max Δχ²  =  7.0 + 6.6 k       k = 1…8 free components
+```
+
+Applying that as a linear per-component penalty **made agreement worse**
+(2.1 % → 1.1 %) and moved the dominant system to `paschen_beta` (41 %): the bias
+relocated from the biggest system to the smallest.  A per-component penalty is
+the wrong tool.
+
+### The real causes, found by looking at the 31 strongest-line objects
+
+Comparing the statistic at the SPE redshift against the winner's showed three
+distinct failure classes.
+
+**1. SPE false positives.**  Two "strong lines" are not there: the claimed
+[S III] 9530 (S/N 13.8, FWHM 92 Å) sits on pixels reading 1.04, 0.97, 0.87,
+0.89, 0.98, 0.86, 0.94 ×10⁻¹⁷ — flat; the claimed [O I] 6303 (S/N 43.5,
+FWHM 143 Å) sits on noise at continuum S/N 1.2.  Real narrow lines have
+FWHM ≈ LSF ≈ 32–60 Å.  Across the cached sample **17 % of SPE lines at S/N > 5
+have FWHM > 80 Å** (22 of 93 objects): 6 of 22 [O III] 5008, 3 of 4 Pa-β,
+3 of 4 [S III] 9530; Hα and [N II] are clean (0 of 50).  SPE line S/N is not
+usable as truth without a width check; `spe_reference` now drops such lines.
+
+**2. Multi-line system degeneracy at the coarse grid.**  Object
+2688606391657706383 has Hβ and [O III] 5008 at S/N 21 and 44 — both clearly
+present (my matched filter gives Δχ² 534 and 320 at the SPE wavelengths).  At
+z = 1.2 the Hα complex maps Hβ→Hα and [O III]→[S II] 6731 to within 1.6 pixels,
+and on a 600 km/s grid the wrong identification wins by 3 %.  The wavelength
+*ratios* differ by 0.4 % and do discriminate — but only once each candidate is
+placed at its own best redshift.  Tier B previously fitted at the fixed coarse
+redshift.  `refine_redshifts_locally` now re-scans the best coarse candidate
+of every system on a 60 km/s grid before the winner is chosen.
+
+**3. List-order identification in overlapping windows.**  The blind grid emitted
+one hypothesis per redshift with the *first* visible system.  Over
+1.57 < z < 1.82 both Balmer systems are visible; the identification was being
+decided by the order of `SYSTEMS`.  Fixed: one hypothesis per visible system.
+
+A fourth class is real but deferred: bright low-redshift galaxies (e.g. the
+Pa-β S/N 51 object at z = 0.015) whose stellar continuum has structure a
+12-knot spline cannot follow, so everything looks like a line.  The reduced-χ²
+gate flags them; identifying them needs a continuum that follows stellar
+features, i.e. the stellar-population model the brief deferred until residuals
+demanded it.  For this class, they do.
+
+### Other work this session
+
+- Stage-1 scan **2× faster with bit-identical output** (1.5 → 0.71 ms per
+  hypothesis; max absolute difference 0.0 over 4664 rows): pixel edges computed
+  once, broad columns reused between the orthogonality test and the fit.
+- The measured per-object noise scale now **enters the likelihood**
+  (`Spectrum1D.with_variance_scale`), and the inflation is split into its
+  variance-scale and correlation parts so nothing is corrected twice.
+- **DESI truth set sized** (`~/data/euclid/with_desi/desi_euclid_q1_galaxies.fits`):
+  44 667 DESI–Euclid matches, all `GALAXY` spectype (no QSO class in this file),
+  RA 262.5–277.0, Dec 63.1–68.9 (EDF-N).  With Δχ²_DESI > 25 and H ≲ 22.5:
+  17 527 in the Pa-β window, 20 951 in He I/Pa-γ/δ, 9 284 in Hα, 254 in
+  Hβ–Hδ.  A broad-line AGN label set will need a separate pull.
+
+### Pending
+
+Blind recovery re-run with the three fixes, three variants (raw ranking;
+per-system null offsets; raw + SPE/PHZ hypotheses as production would use).
+Results appended below when the run completes.
