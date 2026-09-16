@@ -874,3 +874,61 @@ DESI redshifts (44 667 EDF-N galaxies, Δχ²_DESI > 25), which is what the plan
 always specified for M4.
 
 Tests: **274 offline**.
+
+---
+
+## 2026-09-17 — session 7: DESI as truth
+
+### Sample
+
+35 810 of the 36 149 DESI galaxies in EDF-N with Δχ²_DESI > 25 and
+H ≲ 22.5 have a Q1 spectrum.  Twelve SIR files richest in matches were pulled
+(`~/data/euclid/q1/SIR/`, now 32 files, 19 tiles) giving 503 DESI galaxies
+with certain redshifts.  Blind recovery against `desi_z`: **1.4 %**.
+
+That number is right and uninformative.  **481 of the 503 are at z < 0.45.**
+DESI's Euclid overlap is dominated by bright BGS galaxies, and a z < 0.45 galaxy
+has no strong emission line in the red grism — Pa-β is ~5 % of Hα.  The sample
+tests the continuum, not line identification.  Its 77 confident-but-wrong
+identifications are bright (median S/N 58 per pixel) at z = 0.04–0.26, where
+the H-band stellar features — Mg I 1.50 µm, the CO bandheads at 1.56–1.62 µm,
+Si I 1.59, Al I 1.675 µm — all fall inside 12500–18500 Å.  The multi-line
+templates are fitting the bumps *between* stellar absorption bands.  The
+stellar-population continuum the brief deferred "until residuals demand it" is
+now demanded, for the bright low-redshift population.
+
+### The right test: the Hα window
+
+9 091 DESI galaxies at 0.9 < z < 1.8 have Q1 spectra (5 788 with Δχ²_DESI > 100).
+They are spread thin — about ten per file — so twelve more files gave 114.
+Median continuum S/N 3.0: faint ELGs.
+
+Blind agreement: **14 %** overall.  The honest denominator is whether Euclid
+detects Hα at all.  A single Hα matched filter placed *at the DESI redshift*:
+
+| Hα Δχ² at DESI z | fraction of sample | blind agreement among them |
+|---|---:|---:|
+| ≤ 9 (not detectable) | 32 % | 3 % |
+| > 9 | 68 % | 19 % |
+| > 25 | 50 % | **25 %** |
+| > 50 | 28 % | **38 %** |
+
+Where there is nothing to identify, agreement is ~0 as it must be.  Where Hα is
+clearly present, the blind scan identifies the redshift 25–38 % of the time.
+The residual failures are the single-line ambiguity — Hα against [O III] and
+Pa-β with no second line above noise — which the PHZ/SPE hypotheses of the
+production configuration exist to break.  That test is running.
+
+### What the experiment established, in one place
+
+- SPE line detections at S/N 5–10 are frequently absent from the data; 17 % of
+  SPE lines at S/N > 5 have impossible widths.  Not a usable truth.
+- DESI is a clean truth but its Euclid overlap is mostly low-z bright galaxies
+  with no grism emission lines; the Hα-window subsample is the line test.
+- Six pipeline defects found and fixed (ranking, list order, local refinement,
+  templates, outlier shape test, edge margin); two proposed fixes measured to be
+  harmful and left off by default (per-component penalty, more knots).
+- Bright low-z galaxies need a stellar continuum model.
+- One object (2684915737657679255) shows a dominant asymmetric ~100 Å feature
+  that is a broad-line candidate mislabelled by SPE as a z = 0.5 galaxy; first
+  thing to look at when dither-level fitting exists.
