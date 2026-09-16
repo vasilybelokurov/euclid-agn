@@ -219,6 +219,7 @@ def test_selection_keeps_both_rankings():
     )
     scan["delta_chi2_total"] = scan.delta_chi2_narrow + scan.delta_chi2_broad
     scan["delta_chi2_penalised"] = scan.delta_chi2_total - 6.6 * scan.n_components
+    scan["rank_statistic"] = scan.delta_chi2_penalised
     selected = select_for_refinement(scan, n_refine=1)
     assert set(selected["system"]) == {"halpha_complex", "paschen_beta"}
     assert set(selected["selected_by"]) == {"total", "broad"}
@@ -233,6 +234,7 @@ def test_ambiguity_is_reported():
             "system": ["halpha_complex", "paschen_beta"],
             "delta_chi2_total": [500.0, 480.0],
             "delta_chi2_penalised": [500.0, 480.0],
+            "rank_statistic": [500.0, 480.0],
         }
     )
     info = rank_alternatives(scan, scan.iloc[0])
@@ -389,13 +391,13 @@ def test_local_refinement_sharpens_a_coarse_redshift():
     settings = ScreenSettings(broad_sigma_kms=(600.0,), n_refine=0, n_local=3)
     coarse = quick_scan(spectrum, blind_grid(z_min=1.1, z_max=1.3, step_kms=600.0), settings)
     refined = refine_redshifts_locally(spectrum, coarse, settings)
-    best_coarse = coarse.loc[coarse["delta_chi2_penalised"].idxmax()]
-    best_refined = refined.loc[refined["delta_chi2_penalised"].idxmax()]
+    best_coarse = coarse.loc[coarse["rank_statistic"].idxmax()]
+    best_refined = refined.loc[refined["rank_statistic"].idxmax()]
     dv_coarse = abs(C_KMS * (best_coarse["z"] - Z) / (1 + Z))
     dv_refined = abs(C_KMS * (best_refined["z"] - Z) / (1 + Z))
     assert dv_refined <= dv_coarse
     assert dv_refined < 120.0
-    assert best_refined["delta_chi2_penalised"] >= best_coarse["delta_chi2_penalised"]
+    assert best_refined["rank_statistic"] >= best_coarse["rank_statistic"]
     assert "coarse_z" in refined.columns
 
 

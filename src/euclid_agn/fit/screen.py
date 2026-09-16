@@ -124,6 +124,7 @@ from euclid_agn.models.broad import BroadFamily, sigma_grid
 from euclid_agn.models.forward import HypothesisFit, fit_hypothesis
 from euclid_agn.models.line_catalog import BY_SYSTEM, LineSystem, visible_systems
 from euclid_agn.models.narrow import NarrowSystem, velocity_grid
+from euclid_agn.models.templates import template_column, templates_for
 from euclid_agn.numerics import blas_safe
 from euclid_agn.spectra.continuum import bspline_basis
 
@@ -154,6 +155,13 @@ class ScreenSettings:
     #: chi-squared.  The default is the measured slope of the null maximum
     #: against the number of components; see the module docstring.
     component_penalty: float = 6.6
+    #: Which statistic ranks hypotheses.  ``"template"`` uses the best
+    #: fixed-ratio template (one free amplitude, see
+    #: :mod:`euclid_agn.models.templates`) plus the broad gain;
+    #: ``"penalised"`` uses the free-amplitude total minus the component
+    #: penalty.  Measured on real Q1 spectra the free-amplitude statistic
+    #: agrees with SPE 2.6% of the time; see the module docstring.
+    rank_by: str = "template"
     #: Local redshift refinement: after the coarse scan, the best candidates
     #: are re-scanned on a fine grid of +/- ``local_half_width_kms`` in steps
     #: of ``local_step_kms``.  Two line systems can map the same observed
@@ -418,6 +426,27 @@ def quick_scan(
             narrow_statistic, narrow_amplitudes = (
                 matched_filter(projected, columns) if columns.shape[1] else (0.0, np.zeros(0))
             )
+            template_statistic, template_name, template_lines = 0.0, "", 0
+            template_best_column = None
+            for template in templates_for(system):
+                column, n_lines = template_column(
+                    projected, template, hypothesis.z, settings.narrow_sigma_kms
+                )
+                if column is None:
+                    continue
+                statistic, _ = matched_filter(projected, column[:, None])
+                if statistic > template_statistic:
+                    template_statistic, template_name, template_lines = (
+                        statistic,
+                        template.name,
+                        n_lines,
+                    )
+                    template_best_column = column
+            # Identification statistic: template and broad component fitted
+            # *jointly*, so flux shared between them is counted once.  Summing
+            # two separately optimised statistics let a doublet template and a
+            # broad Gaussian both claim the same blob.
+            identification = template_statistic
 
             best = {
                 "delta_chi2_broad": 0.0,
@@ -454,6 +483,14 @@ def quick_scan(
                         )
                         statistic, amplitudes = matched_filter(projected, joint)
                         gain = statistic - narrow_statistic
+                        joint_identification = (
+                            np.column_stack([template_best_column, column])
+                            if template_best_column is not None
+                            else column[:, None]
+                        )
+                        identification = max(
+                            identification, matched_filter(projected, joint_identification)[0]
+                        )
                         if gain > best["delta_chi2_broad"]:
                             best = {
                                 "delta_chi2_broad": gain,
@@ -482,6 +519,10 @@ def quick_scan(
                     "broad_sigma_max_identifiable_kms": sigma_max,
                     "n_components": int(columns.shape[1])
                     + (1 if best["delta_chi2_broad"] > 0 else 0),
+                    "delta_chi2_template": template_statistic,
+                    "delta_chi2_identification": identification,
+                    "template": template_name,
+                    "n_template_lines": template_lines,
                 }
             )
     table = pd.DataFrame(rows)
@@ -495,6 +536,14 @@ def quick_scan(
             table["delta_chi2_penalised"] = (
                 table["delta_chi2_total"] - settings.component_penalty * table["n_components"]
             )
+        # delta_chi2_identification is the joint template + broad fit computed
+        # above; it ranks hypotheses when rank_by is "template".  The
+        # free-amplitude columns stay for measurement.
+        table["rank_statistic"] = (
+            table["delta_chi2_identification"]
+            if settings.rank_by == "template"
+            else table["delta_chi2_penalised"]
+        )
     return table
 
 
@@ -566,7 +615,7 @@ def refine_redshifts_locally(
     spectrum,
     scan: pd.DataFrame,
     settings: ScreenSettings,
-    rank_column: str = "delta_chi2_penalised",
+    rank_column: str = "rank_statistic",
 ) -> pd.DataFrame:
     """Re-scan the best coarse candidates on a fine local grid.
 
@@ -621,11 +670,11 @@ def rank_alternatives(scan: pd.DataFrame, winner) -> dict[str, float]:
             "best_alternative_system": "",
             "best_alternative_z": float("nan"),
         }
-    best = others.loc[others["delta_chi2_penalised"].idxmax()]
+    best = others.loc[others["rank_statistic"].idxmax()]
     z_w, z_a = float(winner["z"]), float(best["z"])
     return {
         "delta_chi2_over_other_system": float(
-            winner["delta_chi2_penalised"] - best["delta_chi2_penalised"]
+            winner["rank_statistic"] - best["rank_statistic"]
         ),
         "velocity_to_best_alternative_kms": float(
             C_KMS * abs(z_w - z_a) / (1.0 + 0.5 * (z_w + z_a))
@@ -643,7 +692,7 @@ def select_for_refinement(scan: pd.DataFrame, n_refine: int) -> pd.DataFrame:
     """
     if scan.empty or n_refine <= 0:
         return scan.head(0)
-    by_total = scan.nlargest(n_refine, "delta_chi2_penalised")
+    by_total = scan.nlargest(n_refine, "rank_statistic")
     by_broad = scan.nlargest(n_refine, "delta_chi2_broad")
     selected = pd.concat([by_total, by_broad]).drop_duplicates(subset=["z", "system"])
     selected = selected.assign(
@@ -654,7 +703,7 @@ def select_for_refinement(scan: pd.DataFrame, n_refine: int) -> pd.DataFrame:
             for index in selected.index
         ]
     )
-    return selected.sort_values("delta_chi2_penalised", ascending=False)
+    return selected.sort_values("rank_statistic", ascending=False)
 
 
 def screen_spectrum(
@@ -701,6 +750,9 @@ def screen_spectrum(
             "quick_delta_chi2_broad": candidate["delta_chi2_broad"],
             "quick_delta_chi2_total": candidate["delta_chi2_total"],
             "quick_delta_chi2_penalised": candidate["delta_chi2_penalised"],
+            "quick_delta_chi2_identification": candidate["delta_chi2_identification"],
+            "template": candidate["template"],
+            "rank_by": settings.rank_by,
             "n_components": candidate["n_components"],
             "noise_inflation": noise_inflation,
             "delta_chi2_effective": float(candidate["delta_chi2_broad"]) / noise_inflation**2,
