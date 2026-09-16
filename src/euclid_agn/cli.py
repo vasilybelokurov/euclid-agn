@@ -254,6 +254,62 @@ def screen(
     typer.echo(json.dumps(summary, indent=2, default=float))
 
 
+validate_app = typer.Typer(help="Validation experiments")
+app.add_typer(validate_app, name="validate")
+
+
+@validate_app.command("blind-redshift")
+def validate_blind_redshift(
+    glob: str = typer.Option(..., help="Glob of cached SIR files"),
+    output: Path = typer.Option(None, help="Write the per-object table here"),
+    config: Path = typer.Option(None, help="YAML config"),
+    step_kms: float = typer.Option(400.0, help="Blind scan step"),
+    tolerance_kms: float = typer.Option(1000.0, help="Agreement tolerance"),
+    min_snr: float = typer.Option(3.0, help="Minimum SPE line SNR to record"),
+    max_objects: int = typer.Option(None, help="Stop after this many objects"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Blind redshift recovery: scan with no catalogue input, compare with SPE."""
+    _setup_logging(verbose)
+    import glob as globmodule
+
+    from euclid_agn.io.sir import open_sir_file
+    from euclid_agn.pipeline.ingest import make_backend
+    from euclid_agn.validation.metrics import blind_redshift_experiment, catastrophic_fraction
+    from euclid_agn.validation.truth import spe_reference
+
+    paths = sorted(globmodule.glob(str(Path(glob).expanduser())))
+    if not paths:
+        typer.echo("no files matched")
+        raise typer.Exit(code=1)
+    object_ids: list[int] = []
+    for path in paths:
+        with open_sir_file(path) as sir:
+            object_ids += sir.object_ids()
+
+    backend = make_backend(_load_config(config))
+    reference = spe_reference(backend, object_ids, min_snr=min_snr)
+    result = blind_redshift_experiment(
+        paths,
+        reference,
+        step_kms=step_kms,
+        tolerance_kms=tolerance_kms,
+        max_objects=max_objects,
+    )
+    payload = {
+        "n_compared": int(len(result.compared)),
+        "overall": result.summary().to_dict(orient="records"),
+        "catastrophic_fraction": catastrophic_fraction(result.compared, tolerance_kms),
+    }
+    if "snr_bin" in result.compared:
+        payload["by_spe_line_snr"] = result.summary(by="snr_bin").to_dict(orient="records")
+    if output:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        result.compared.to_parquet(output, index=False)
+        payload["table"] = str(output)
+    typer.echo(json.dumps(payload, indent=2, default=str))
+
+
 @app.command("plot")
 def plot(
     screen: Path = typer.Option(..., help="Screening results parquet"),

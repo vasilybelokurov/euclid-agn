@@ -161,3 +161,29 @@ def test_spectrum_page_labels_its_shading(archive, tmp_path):
     assert "unusable" in joined
     assert "outside" in joined
     assert "sigma" in joined or "\\sigma" in joined
+
+
+def test_redshift_agreement_figure_is_written(tmp_path):
+    import numpy as np
+    import pandas as pd
+
+    from euclid_agn.plotting.atlas import plot_redshift_agreement
+
+    compared = pd.DataFrame(
+        {
+            "object_id": [1, 2, 3, 4],
+            "z": [1.2, 1.45, 2.4, 0.3],
+            "spe_gal_z": [1.2001, 1.4499, 1.2, 0.3002],
+            "delta_v_kms": [13.0, -12.0, 129000.0, 46.0],
+            "agrees": [True, True, False, True],
+            "spe_best_snr": [30.0, 12.0, 4.0, 8.0],
+            "snr_bin": pd.Categorical(
+                ["SNR > 20", "SNR 10-20", "SNR 3-5", "SNR 5-10"],
+                categories=["SNR 3-5", "SNR 5-10", "SNR 10-20", "SNR > 20"],
+                ordered=True,
+            ),
+        }
+    )
+    path = plot_redshift_agreement(compared, tmp_path / "agreement.png")
+    assert path.exists() and path.stat().st_size > 5000
+    assert np.isfinite(compared["delta_v_kms"]).all()

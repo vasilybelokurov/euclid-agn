@@ -341,3 +341,76 @@ def build_atlas(
         str(plot_screen_summary(table, directory / "screen_statistics.png"))
     )
     return created
+
+
+def plot_redshift_agreement(compared: pd.DataFrame, path: str | Path) -> Path:
+    """Blind-scan redshift against the SPE redshift, and where it fails.
+
+    The comparison is between two measurements of the same photons, so
+    agreement means the lines are real and the fit is useful - not that the
+    object is an AGN.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    z_blind = np.asarray(compared["z"], dtype=float)
+    z_reference = np.asarray(compared["spe_gal_z"], dtype=float)
+    delta_v = np.asarray(compared["delta_v_kms"], dtype=float)
+    snr = (
+        np.asarray(compared["spe_best_snr"], dtype=float)
+        if "spe_best_snr" in compared
+        else np.full(z_blind.size, np.nan)
+    )
+    agrees = np.asarray(compared["agrees"], dtype=bool)
+
+    fig, axes = plt.subplots(1, 3, figsize=(13.5, 4.2))
+
+    ax = axes[0]
+    ax.plot([0, 6], [0, 6], color="0.6", lw=0.9, ls="--")
+    ax.scatter(z_reference[~agrees], z_blind[~agrees], s=14, color="0.7", label="disagrees")
+    ax.scatter(z_reference[agrees], z_blind[agrees], s=16, color="tab:blue", label="agrees")
+    ax.set_xlabel("SPE galaxy redshift")
+    ax.set_ylabel("blind-scan redshift")
+    ax.set_xlim(0, 6)
+    ax.set_ylim(0, 6)
+    ax.legend(fontsize=8, loc="upper left")
+
+    ax = axes[1]
+    finite = np.isfinite(snr)
+    ax.axhspan(-1000, 1000, color="0.9", lw=0)
+    ax.scatter(snr[finite], np.clip(delta_v[finite], -2e5, 2e5), s=16, color="tab:blue")
+    ax.set_xscale("log")
+    ax.set_yscale("symlog", linthresh=1000)
+    ax.set_xlabel("SPE best-line S/N")
+    ax.set_ylabel(r"$\Delta v$ (blind $-$ SPE) [km s$^{-1}$]")
+    ax.text(
+        0.03,
+        0.05,
+        "grey band: agreement within 1000 km/s",
+        transform=ax.transAxes,
+        fontsize=8,
+    )
+
+    ax = axes[2]
+    if "snr_bin" in compared:
+        grouped = compared.groupby("snr_bin", observed=True)["agrees"]
+        fractions = grouped.mean()
+        counts = grouped.size()
+        positions = np.arange(len(fractions))
+        ax.bar(positions, fractions.values, color="tab:blue")
+        ax.set_xticks(positions)
+        ax.set_xticklabels([str(i) for i in fractions.index], fontsize=8, rotation=20)
+        for x, (fraction, count) in enumerate(zip(fractions.values, counts.values, strict=True)):
+            ax.text(x, fraction + 0.02, f"n={count}", ha="center", fontsize=8)
+        ax.set_ylim(0, 1.15)
+        ax.set_ylabel("fraction agreeing with SPE")
+        ax.set_xlabel("SPE best-line S/N")
+
+    fig.suptitle(
+        f"Blind redshift recovery on {len(compared)} real Q1 spectra "
+        "(no catalogue redshift used as input)",
+        fontsize=11,
+    )
+    fig.tight_layout()
+    fig.savefig(path, dpi=140)
+    plt.close(fig)
+    return path
