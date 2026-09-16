@@ -141,6 +141,7 @@ def template_column(
     z: float,
     sigma_kms: float,
     min_containment: float = 0.8,
+    edge_margin: float = 0.0,
 ) -> tuple[np.ndarray | None, int]:
     """One column: the template's visible lines at their fixed ratios.
 
@@ -148,10 +149,13 @@ def template_column(
     Each line is a unit-flux LSF-broadened profile scaled by its ratio, so the
     single fitted amplitude is the flux of the reference line.
 
-    A line whose profile is less than ``min_containment`` on covered pixels is
-    left out: a template line on the very edge of the grid fits the edge
-    artefact rather than the sky.  VERIFIED on a real Q1 spectrum where the
-    winning template placed Pa-gamma on the red-edge spike at 18450 A.
+    A line whose profile is less than ``min_containment`` on covered pixels, or
+    whose centre lies within ``edge_margin`` Angstrom of either end of the
+    covered range, is left out.  The margin is the rule that matters: VERIFIED
+    on a real Q1 spectrum, the winning template placed Pa-gamma at 18468 A -
+    99 per cent contained - on a spike occupying the last three pixels before
+    18500 A.  The outermost pixels of the science window are not trustworthy
+    and a line there is fitting them, not the sky.
     """
     from euclid_agn.spectra.lsf import effective_sigma, sigma_kms_to_angstrom
 
@@ -161,8 +165,11 @@ def template_column(
         return None, 0
     column = np.zeros(wavelength.size)
     n_used = 0
+    lo, hi = float(wavelength[0]) + edge_margin, float(wavelength[-1]) - edge_margin
     for name, ratio in visible.items():
         centre = BY_NAME[name].rest * (1.0 + z)
+        if not (lo <= centre <= hi):
+            continue
         width = effective_sigma(sigma_kms_to_angstrom(sigma_kms, centre), projected.lsf_sigma)
         line = projected.line_column(centre, width)
         if min_containment > 0.0 and float(np.sum(line * projected.widths)) < min_containment:

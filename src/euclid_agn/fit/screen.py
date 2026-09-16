@@ -156,6 +156,11 @@ class ScreenSettings:
     #: chi-squared.  The default is the measured slope of the null maximum
     #: against the number of components; see the module docstring.
     component_penalty: float = 6.6
+    #: Lines (template or broad) whose centre lies within this many pixels of
+    #: either end of the covered range are not tested: the outermost pixels of
+    #: the science window carry edge artefacts that a line placed on them fits
+    #: perfectly.
+    edge_margin_pixels: float = 4.0
     #: Robust rejection of narrow outlier pixels the archive mask leaves in
     #: (see :mod:`euclid_agn.spectra.outliers`).  ``0`` disables it.
     outlier_threshold: float = 5.0
@@ -367,7 +372,12 @@ def identifiable_sigmas(
     out = []
     for sigma in settings.broad_sigma_kms:
         column = broad_column(
-            projected, line_name, z, sigma, min_containment=settings.min_broad_containment
+            projected,
+            line_name,
+            z,
+            sigma,
+            min_containment=settings.min_broad_containment,
+            edge_margin_pixels=settings.edge_margin_pixels,
         )
         if column is None:
             continue
@@ -384,6 +394,7 @@ def broad_column(
     sigma_kms: float,
     velocity_kms: float = 0.0,
     min_containment: float = 0.0,
+    edge_margin_pixels: float = 0.0,
 ) -> np.ndarray | None:
     """Single broad column, or ``None`` if too little of it is observed.
 
@@ -401,6 +412,9 @@ def broad_column(
         velocity_kms=velocity_kms,
     )
     if not component.in_range(projected.wavelength, n_sigma=1.0):
+        return None
+    margin = edge_margin_pixels * projected.bin_width
+    if not (projected.wavelength[0] + margin <= component.centre <= projected.wavelength[-1] - margin):
         return None
     column = projected.line_column(component.centre, component.observed_sigma_angstrom)
     if min_containment > 0.0 and float(np.sum(column * projected.widths)) < min_containment:
@@ -454,6 +468,7 @@ def quick_scan(
                     hypothesis.z,
                     settings.narrow_sigma_kms,
                     min_containment=settings.min_broad_containment,
+                    edge_margin=settings.edge_margin_pixels * projected.bin_width,
                 )
                 if column is None:
                     continue
@@ -495,6 +510,7 @@ def quick_scan(
                                 sigma,
                                 velocity,
                                 min_containment=settings.min_broad_containment,
+                                edge_margin_pixels=settings.edge_margin_pixels,
                             )
                         )
                         if column is None:

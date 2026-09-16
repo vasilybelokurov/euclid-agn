@@ -806,3 +806,71 @@ demanded it.  For this class, they do.
 Blind recovery re-run with the three fixes, three variants (raw ranking;
 per-system null offsets; raw + SPE/PHZ hypotheses as production would use).
 Results appended below when the run completes.
+
+### Results of the fixes, and what the confident failures turned out to be
+
+Blind recovery after local refinement, all-systems grid and the SPE width cut:
+2.6 % (raw), 1.8 % (per-system offsets), 3.2 % (with SPE/PHZ hypotheses
+added).  The last number is the decisive one: handed the correct redshift as
+an explicit hypothesis, the scan still preferred a wrong one 97 % of the time.
+The statistic, not the grid, was the problem.
+
+**Fixed-ratio templates for identification.**  With one free non-negative
+amplitude per line, a hypothesis is never penalised for predicting a line that
+is absent — there is no evidence *against*.  `models/templates.py` gives each
+system a few fixed-ratio templates; the identification statistic is one joint
+fit of the best template plus the broad column, whatever the number of lines.
+Summing separately optimised template and broad statistics was tried first and
+let a Mg II doublet and a broad Gaussian both claim the same blob; the joint fit
+counts shared flux once.  Templates choose the redshift only; measurement keeps
+free amplitudes.  Synthetic Hβ+[O III] vs Hα-complex (1.6 px apart): template
+statistic for the wrong identification < 0.7 of the right one.
+
+Effect on real data: S/N > 5 objects 5.4 % → 12.2 %; overall unchanged at ~3 %.
+
+**The bulk of the 659 has nothing to identify.**  Continuum S/N ≈ 3, no line
+above S/N 5 in 566 of them.  A maximum over ~1000 noise hypotheses beats one
+truth hypothesis by construction.  That is not a pipeline failure and the
+denominator was wrong.  Restricted to objects with a plausible SPE line at
+S/N > 5 and SPE probability > 0.9 (n = 42): agreement 14–19 %, 21–29 % at
+S/N > 10 (n = 14).
+
+**Outlier pixels drove the largest statistics.**  Agreement *fell* with my
+statistic: 1.9 % in the top bin (> 200).  Those spectra had a median of 4
+pixels beyond 5 robust-σ (0 elsewhere): single-pixel spikes at +20 σ, deep
+dips, unmasked edges.  38 % of spectra have at least one such pixel.  A
+Gaussian matched filter gives Δχ² ~ 400 to any template that lands on a
++20 σ pixel.  `spectra/outliers.py` rejects narrow runs — but the first version
+rejected by *width* and removed real lines at S/N 10–20 (the [O III] S/N 44
+object's truth statistic went 534+320 → 76).  Rewritten as a *shape* test: a
+spike's neighbours are at the baseline, a line's at ≥ 0.6 of its peak.
+Regression tests inject lines from S/N 100 down to 5.  With the fix, that
+object is identified correctly at statistic 1024.
+
+**Continuum flexibility made it worse**, not better (truth/winner ratio
+0.68 → 0.27 from 12 to 50 knots), so the residual failures are not continuum
+structure.
+
+**Plotting the seven confident-but-wrong cases** (`plots/confident_wrong.png`)
+settled where the remaining disagreement lives:
+
+- in three, nothing is visible at SPE's claimed line (Pa-γ S/N 7, Hβ S/N 5,
+  [O II] S/N 19) — SPE is wrong;
+- in one, my scan finds Hβ + [O III] 4959 + [O III] 5007 as three clean peaks
+  with the right ratios at z = 1.950 while SPE's [S II] sits on nothing — mine
+  looks right;
+- in one, SPE and I put lines on the same feature with different identifications;
+- one has a dominant asymmetric 4×10⁻¹⁷ feature ~100 Å wide — a broad-line
+  candidate, not a z = 0.5 galaxy — worth a dither-level look;
+- one revealed a bug: the winning template put Pa-γ on a spike in the last
+  three pixels before 18500 Å.  Lines within 4 pixels of either end of the
+  covered range are no longer tested (`edge_margin_pixels`).
+
+**Conclusion for the truth set.**  SPE agreement cannot be pushed much further
+because SPE itself is wrong for a large share of the S/N 5–10 objects that
+dominate the strong-line sample.  The comparison has done its job — it found
+six real defects — and is now limited by its reference.  Validation moves to
+DESI redshifts (44 667 EDF-N galaxies, Δχ²_DESI > 25), which is what the plan
+always specified for M4.
+
+Tests: **274 offline**.

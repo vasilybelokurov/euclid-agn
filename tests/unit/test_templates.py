@@ -105,8 +105,12 @@ def test_template_lines_on_the_edge_are_dropped():
     projected = prepare(make([], 0.688), SETTINGS)
     template = [t for t in templates_for("helium_paschen_gamma") if t.name == "paschen_only"][0]
     # At z=0.688 Pa-gamma sits at 18468 A, within 3 pixels of the edge.
-    strict, n_strict = template_column(projected, template, 0.688, 200.0, min_containment=0.8)
-    loose, n_loose = template_column(projected, template, 0.688, 200.0, min_containment=0.0)
-    assert n_loose > n_strict
+    # Pa-gamma at 18468 A is 99% contained, so containment alone keeps it; the
+    # edge margin (4 pixels = 54 A) is what removes it.
+    contained, n_contained = template_column(projected, template, 0.688, 200.0, min_containment=0.8)
+    margined, n_margined = template_column(
+        projected, template, 0.688, 200.0, min_containment=0.8, edge_margin=4 * 13.4
+    )
+    assert n_contained > n_margined
     edge = projected.wavelength > 18400
-    assert np.sum(strict[edge]) < 0.1 * np.sum(loose[edge])
+    assert np.sum(margined[edge]) < 0.1 * np.sum(contained[edge])
