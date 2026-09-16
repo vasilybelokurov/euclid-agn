@@ -18,6 +18,19 @@ python -m euclid_agn plot \
 | `fits/fit_<object_id>.png` | one candidate in full: data, both models, the broad component on the M1 continuum, and the normalised residuals of both models. |
 | `spectra/spectrum_<object_id>.png` | one object's combined spectrum above each contributing dither, with unusable pixels shaded and contaminant counts labelled. |
 
+## What the grey shading means
+
+| figure | grey element | meaning |
+|---|---|---|
+| `spectra/*.png` | mid-grey, full height, one pixel wide | **unusable pixel**: SIR `MASK` has the `NOT_USE` bit, or the variance is non-positive or non-finite, or the flux is non-finite. Dropped from every fit, shown rather than hidden. |
+| `spectra/*.png` | very light grey at both ends | outside the 12500–18500 Å science window. The stored grid runs 11900–19002 Å. |
+| `fits/*.png`, `candidate_grid.png` | band hugging the data | **±1σ from the reported per-pixel variance** (`VAR × FSCALE²`). |
+| `screen_statistics.png` | grey histogram | all rows; the blue overlay is the subset with reduced χ²(M0) < 4. |
+
+The ±1σ band is the *reported* variance, which the noise audit measured to be
+about 1.45× too small, so the true scatter is wider than the band looks. That is
+why residual panels routinely run past ±2σ.
+
 Two reference objects are included for orientation:
 
 - `spectra/spectrum_2731173428682078045.png` — the IRSA tutorial object, an

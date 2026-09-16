@@ -139,3 +139,25 @@ def test_broad_overlay_uses_the_m1_continuum_not_the_m0_one(screen_table, archiv
     broad_block = fit.blocks_m1.design[:, fit.blocks_m1.slices["broad"]]
     naive = fit.m0.model + broad_block @ fit.blocks_m1.block(fit.m1, "broad")
     assert not np.allclose(naive + narrow_model, fit.m1.model, rtol=1e-8, atol=1e-30)
+
+
+def test_spectrum_page_labels_its_shading(archive, tmp_path):
+    """Grey shading must be explained on the figure, not just in the docs."""
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    from euclid_agn.io.sir import open_sir_file
+    from euclid_agn.plotting.diagnostics import plot_spectrum
+
+    with open_sir_file(archive[0]) as sir:
+        spectrum = sir.read_combined(sir.group_for_object(201))
+    fig, ax = plt.subplots()
+    plot_spectrum(ax, spectrum)
+    labels = ax.get_legend_handles_labels()[1]
+    plt.close(fig)
+    joined = " ".join(labels).lower()
+    assert "unusable" in joined
+    assert "outside" in joined
+    assert "sigma" in joined or "\\sigma" in joined

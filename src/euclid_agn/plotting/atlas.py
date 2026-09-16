@@ -180,8 +180,8 @@ def plot_fit_grid(
     fig.supxlabel(r"observed wavelength [$\AA$]", fontsize=9)
     fig.supylabel(r"$f_\lambda$ [erg s$^{-1}$ cm$^{-2}$ $\AA^{-1}$]", fontsize=9)
     fig.suptitle(
-        "Stage-1 candidates: grey data, blue M0 (continuum + narrow), "
-        "red M1 (all components), dashed red M1 continuum + broad only",
+        "Stage-1 candidates: grey data with its $\\pm1\\sigma$ band, blue M0 "
+        "(continuum + narrow), red M1 (all components), dashed red M1 continuum + broad",
         fontsize=10,
     )
     fig.tight_layout()
@@ -219,8 +219,13 @@ def plot_screen_summary(table: pd.DataFrame, path: Path) -> Path:
 
     ax = axes[0, 0]
     bins = np.logspace(-1, np.log10(max(statistic.max(), 10.0)), 40)
-    ax.hist(np.clip(statistic, 0.1, None), bins=bins, color="0.7", label="all")
-    ax.hist(np.clip(statistic[ok], 0.1, None), bins=bins, color="tab:blue", label="continuum ok")
+    ax.hist(np.clip(statistic, 0.1, None), bins=bins, color="0.7", label="all spectra")
+    ax.hist(
+        np.clip(statistic[ok], 0.1, None),
+        bins=bins,
+        color="tab:blue",
+        label=r"$\chi^2_\nu$(M0) < 4",
+    )
     ax.set_xscale("log")
     ax.axvline(25.0, color="crimson", ls="--", lw=1.2)
     ax.set_xlabel(r"effective $\Delta\chi^2$  ($\Delta\chi^2/\eta^2$)")

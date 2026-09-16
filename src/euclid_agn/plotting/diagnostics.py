@@ -56,11 +56,37 @@ def plot_spectrum(ax, spectrum, label: str = "", show_sigma: bool = True) -> Non
     sigma = np.where(ok, np.sqrt(spectrum.variance), np.nan)
 
     ylim = _finite_limits(np.concatenate([f - sigma, f + sigma]))
-    ax.fill_between(w, ylim[0], ylim[1], where=~ok, color="0.88", lw=0, step="mid", zorder=0)
-    ax.axvspan(w[0] - 200.0, RGS_SCIENCE_WMIN_ANGSTROM, color="0.96", lw=0, zorder=-1)
+    ax.fill_between(
+        w,
+        ylim[0],
+        ylim[1],
+        where=~ok,
+        color="0.88",
+        lw=0,
+        step="mid",
+        zorder=0,
+        label="unusable pixel (masked or bad variance)",
+    )
+    ax.axvspan(
+        w[0] - 200.0,
+        RGS_SCIENCE_WMIN_ANGSTROM,
+        color="0.96",
+        lw=0,
+        zorder=-1,
+        label=f"outside {RGS_SCIENCE_WMIN_ANGSTROM:.0f}-{RGS_SCIENCE_WMAX_ANGSTROM:.0f} $\\AA$",
+    )
     ax.axvspan(RGS_SCIENCE_WMAX_ANGSTROM, w[-1] + 200.0, color="0.96", lw=0, zorder=-1)
     if show_sigma:
-        ax.fill_between(w, f - sigma, f + sigma, alpha=0.3, lw=0, color="tab:blue", zorder=2)
+        ax.fill_between(
+            w,
+            f - sigma,
+            f + sigma,
+            alpha=0.3,
+            lw=0,
+            color="tab:blue",
+            zorder=2,
+            label=r"$\pm1\sigma$ (reported variance)",
+        )
     ax.plot(w, f, lw=0.9, color="tab:blue", zorder=3)
     ax.set_ylim(*ylim)
     ax.set_xlim(w[0] - 200.0, w[-1] + 200.0)
@@ -107,7 +133,10 @@ def plot_observation(observation, path: str | Path, title: str | None = None) ->
         )
     for ax in axes:
         ax.set_ylabel(r"$f_\lambda$")
-    axes[-1].set_xlabel(r"observed wavelength [$\AA$]  (shaded: outside 12500-18500 $\AA$)")
+    handles, labels = axes[0].get_legend_handles_labels()
+    if handles:
+        axes[0].legend(handles, labels, fontsize=7, loc="upper left", framealpha=0.9)
+    axes[-1].set_xlabel(r"observed wavelength [$\AA$]")
     fig.suptitle(
         title or f"object {observation.object_id}   tile {observation.source.tile_id}",
         fontsize=11,
@@ -234,7 +263,14 @@ def plot_hypothesis_fit(
         2, 1, figsize=(10, 5.5), sharex=True, gridspec_kw={"height_ratios": [2.2, 1]}
     )
     ax = axes[0]
-    ax.fill_between(wavelength, flux - sigma, flux + sigma, color="0.85", lw=0)
+    ax.fill_between(
+        wavelength,
+        flux - sigma,
+        flux + sigma,
+        color="0.85",
+        lw=0,
+        label=r"$\pm1\sigma$ (reported variance; measured ~1.45x too small)",
+    )
     ax.plot(wavelength, flux, lw=0.8, color="0.35", label="data")
     ax.plot(wavelength, fit.m0.model, lw=1.2, color="tab:blue", label="M0 continuum + narrow")
     if fit.m1 is not None:
