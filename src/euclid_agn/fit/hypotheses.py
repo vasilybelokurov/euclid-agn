@@ -249,9 +249,11 @@ def blind_grid(
             require_broad=require_broad,
         )
         found = [s for s in found if s.name in {x.name for x in systems}]
-        if not found:
-            continue
-        out.append(RedshiftHypothesis(z=float(z), origin="blind", system=found[0].name))
+        # One hypothesis per visible system.  Where windows overlap - H-alpha
+        # and H-beta systems are both visible over 1.57 < z < 1.82 - testing
+        # only the first system would decide the identification by list order.
+        for system in found:
+            out.append(RedshiftHypothesis(z=float(z), origin="blind", system=system.name))
     return out
 
 

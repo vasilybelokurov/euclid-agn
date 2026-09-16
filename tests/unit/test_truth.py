@@ -122,3 +122,31 @@ def test_agreement_summary_can_split_by_a_column():
 
 def test_agreement_summary_of_nothing():
     assert agreement_summary(pd.DataFrame()).empty
+
+
+def test_implausibly_wide_spe_lines_are_flagged_and_dropped_from_the_summary():
+    from euclid_agn.validation.truth import MAX_PLAUSIBLE_LINE_FWHM_ANGSTROM
+
+    frame = pd.DataFrame(
+        {
+            "object_id": [1, 1],
+            "spe_rank": [0, 0],
+            "spe_line_name": ["OI6303", "Halpha"],
+            "spe_line_central_wl_gf": [13134.0, 14442.0],
+            "spe_line_flux_gf": [1e-16, 1e-16],
+            "spe_line_snr_gf": [43.5, 8.0],
+            "spe_line_fwhm_gf": [142.6, 30.0],
+        }
+    )
+    lines = spe_lines(FakeBackend([frame]), [1])
+    assert lines["plausible_width"].tolist() == [False, True]
+    assert MAX_PLAUSIBLE_LINE_FWHM_ANGSTROM == 80.0
+
+    redshifts = pd.DataFrame({"object_id": [1], "spe_gal_z": [1.09], "spe_gal_z_err": [0.001],
+                              "spe_gal_z_prob": [0.7], "spe_cont_snr": [1.2]})
+    classification = pd.DataFrame({"object_id": [1], "spe_class": ["galaxy"],
+                                   "spe_gal_prob": [0.7], "spe_qso_prob": [0.1]})
+    out = spe_reference(FakeBackend([redshifts, classification, frame]), [1])
+    # The S/N 43.5 artefact is gone; the plausible H-alpha is what remains.
+    assert out["spe_best_line"].iloc[0] == "Halpha"
+    assert out["spe_best_snr"].iloc[0] == pytest.approx(8.0)

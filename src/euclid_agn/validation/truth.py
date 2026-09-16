@@ -42,6 +42,14 @@ LINE_COLUMNS: tuple[str, ...] = (
 #: SPE marks unmeasured quantities with this sentinel rather than NULL.
 SPE_SENTINEL = -99.0
 
+#: Widest Gaussian FWHM a *narrow* line can plausibly have in the red grism.
+#: The instrumental FWHM is ~32 A for a compact source and ~60 A for the most
+#: extended ones.  VERIFIED on cached Q1 spectra: two SPE "detections" at
+#: S/N 13.8 and 43.5 with FWHM 92 A and 143 A sit on pixels that are flat or
+#: pure noise.  SPE line S/N is therefore not usable as truth without this
+#: width check.
+MAX_PLAUSIBLE_LINE_FWHM_ANGSTROM = 80.0
+
 
 def _chunks(values: Sequence[int], size: int = ID_CHUNK) -> list[list[int]]:
     values = list(values)
@@ -101,7 +109,10 @@ def spe_lines(
     table = pd.concat(frames, ignore_index=True)
     for column in ("spe_line_central_wl_gf", "spe_line_flux_gf", "spe_line_snr_gf"):
         table = table[table[column] > SPE_SENTINEL + 1.0]
-    return table.reset_index(drop=True)
+    table = table.reset_index(drop=True)
+    fwhm = table["spe_line_fwhm_gf"]
+    table["plausible_width"] = (fwhm > 0.0) & (fwhm <= MAX_PLAUSIBLE_LINE_FWHM_ANGSTROM)
+    return table
 
 
 def line_summary(lines: pd.DataFrame) -> pd.DataFrame:
@@ -125,11 +136,22 @@ def line_summary(lines: pd.DataFrame) -> pd.DataFrame:
 
 
 def spe_reference(
-    backend: IrsaQ1Backend, object_ids: Sequence[int], min_snr: float = 3.0
+    backend: IrsaQ1Backend,
+    object_ids: Sequence[int],
+    min_snr: float = 3.0,
+    require_plausible_width: bool = True,
 ) -> pd.DataFrame:
-    """Redshifts, classification and line summary for a list of objects."""
+    """Redshifts, classification and line summary for a list of objects.
+
+    With ``require_plausible_width`` (the default) SPE lines wider than
+    :data:`MAX_PLAUSIBLE_LINE_FWHM_ANGSTROM` are dropped before the summary, so
+    ``spe_best_snr`` refers to a line that can actually be a line.
+    """
     redshifts = spe_redshifts(backend, object_ids)
-    summary = line_summary(spe_lines(backend, object_ids, min_snr=min_snr))
+    lines = spe_lines(backend, object_ids, min_snr=min_snr)
+    if require_plausible_width and not lines.empty:
+        lines = lines[lines["plausible_width"]]
+    summary = line_summary(lines)
     if summary.empty:
         redshifts["n_spe_lines"] = 0
         return redshifts

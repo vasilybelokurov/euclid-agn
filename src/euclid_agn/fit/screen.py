@@ -154,6 +154,16 @@ class ScreenSettings:
     #: chi-squared.  The default is the measured slope of the null maximum
     #: against the number of components; see the module docstring.
     component_penalty: float = 6.6
+    #: Local redshift refinement: after the coarse scan, the best candidates
+    #: are re-scanned on a fine grid of +/- ``local_half_width_kms`` in steps
+    #: of ``local_step_kms``.  Two line systems can map the same observed
+    #: features onto each other to within a pixel or two at the coarse step
+    #: (H-beta/[O III] at z = 1.965 against H-alpha/[S II] at z = 1.2 differ by
+    #: 1.6 pixels); the wavelength *ratios* discriminate them only once each
+    #: is placed at its own best redshift.
+    local_half_width_kms: float = 700.0
+    local_step_kms: float = 60.0
+    n_local: int = 6
     #: Optional per-system null offsets (median of the per-object maximum
     #: Delta chi-squared within each system, measured on line-free spectra).
     #: When given they replace the linear component penalty, which is a fit to
@@ -545,6 +555,55 @@ def refine(
     )
 
 
+def local_redshift_grid(z: float, half_width_kms: float, step_kms: float) -> np.ndarray:
+    """Fine redshift grid around ``z``, uniform in velocity."""
+    n = int(np.floor(half_width_kms / step_kms))
+    offsets = np.arange(-n, n + 1) * step_kms / C_KMS
+    return (1.0 + z) * (1.0 + offsets) - 1.0
+
+
+def refine_redshifts_locally(
+    spectrum,
+    scan: pd.DataFrame,
+    settings: ScreenSettings,
+    rank_column: str = "delta_chi2_penalised",
+) -> pd.DataFrame:
+    """Re-scan the best coarse candidates on a fine local grid.
+
+    Takes the best ``settings.n_local`` rows of ``scan`` *by system* - one per
+    system, so every competing identification gets the same chance - and
+    returns the coarse scan with those rows replaced by their locally refined
+    best.  ``origin`` is preserved so provenance survives the refinement.
+    """
+    if scan.empty or settings.n_local <= 0:
+        return scan
+    best_per_system = scan.loc[scan.groupby("system")[rank_column].idxmax()]
+    top = best_per_system.nlargest(settings.n_local, rank_column)
+    replacements = []
+    for index, row in top.iterrows():
+        grid = local_redshift_grid(
+            float(row["z"]), settings.local_half_width_kms, settings.local_step_kms
+        )
+        hypotheses = [
+            RedshiftHypothesis(float(z), str(row["origin"]), str(row["system"])) for z in grid
+        ]
+        local = quick_scan(spectrum, hypotheses, settings)
+        if local.empty:
+            continue
+        best = local.loc[local[rank_column].idxmax()].copy()
+        best["coarse_z"] = row["z"]
+        best.name = index
+        replacements.append(best)
+    if not replacements:
+        return scan
+    refined = scan.copy()
+    refined["coarse_z"] = refined["z"]
+    for best in replacements:
+        for column, value in best.items():
+            refined.loc[best.name, column] = value
+    return refined
+
+
 def rank_alternatives(scan: pd.DataFrame, winner) -> dict[str, float]:
     """How much better the winning hypothesis is than a different identification.
 
@@ -615,6 +674,7 @@ def screen_spectrum(
     if scan.empty:
         return pd.DataFrame()
     scan = scan.reset_index(drop=True)
+    scan = refine_redshifts_locally(spectrum, scan, settings)
     selected = select_for_refinement(scan, settings.n_refine)
 
     quality = spectrum.quality_metrics()

@@ -361,3 +361,49 @@ def test_screen_records_the_continuum_goodness_of_fit():
     # A correct model on simulated data must pass its own goodness-of-fit test.
     assert table["chi2_reduced_m0"].iloc[0] < 4.0
     assert bool(table["continuum_model_ok"].iloc[0])
+
+
+def test_local_redshift_grid_is_uniform_in_velocity_and_centred():
+    from euclid_agn.fit.screen import local_redshift_grid
+
+    grid = local_redshift_grid(1.2, 700.0, 60.0)
+    assert grid.size == 23
+    assert grid[grid.size // 2] == pytest.approx(1.2)
+    # uniform in velocity offset from the centre
+    offsets = C_KMS * (grid - 1.2) / 2.2
+    assert np.allclose(np.diff(offsets), 60.0, rtol=1e-6)
+
+
+def test_local_refinement_sharpens_a_coarse_redshift():
+    """A 600 km/s coarse grid lands within 300 km/s; refinement gets to ~50."""
+    from euclid_agn.fit.hypotheses import blind_grid
+    from euclid_agn.fit.screen import refine_redshifts_locally
+
+    full_narrow = [
+        *NARROW,
+        LineTruth("NII6548", 4.0e-17, 150.0),
+        LineTruth("SII6716", 8.0e-17, 150.0),
+        LineTruth("SII6731", 6.0e-17, 150.0),
+    ]
+    spectrum = make(full_narrow, seed=41)
+    settings = ScreenSettings(broad_sigma_kms=(600.0,), n_refine=0, n_local=3)
+    coarse = quick_scan(spectrum, blind_grid(z_min=1.1, z_max=1.3, step_kms=600.0), settings)
+    refined = refine_redshifts_locally(spectrum, coarse, settings)
+    best_coarse = coarse.loc[coarse["delta_chi2_penalised"].idxmax()]
+    best_refined = refined.loc[refined["delta_chi2_penalised"].idxmax()]
+    dv_coarse = abs(C_KMS * (best_coarse["z"] - Z) / (1 + Z))
+    dv_refined = abs(C_KMS * (best_refined["z"] - Z) / (1 + Z))
+    assert dv_refined <= dv_coarse
+    assert dv_refined < 120.0
+    assert best_refined["delta_chi2_penalised"] >= best_coarse["delta_chi2_penalised"]
+    assert "coarse_z" in refined.columns
+
+
+def test_local_refinement_keeps_the_origin():
+    from euclid_agn.fit.screen import refine_redshifts_locally
+
+    spectrum = make(NARROW, seed=42)
+    settings = ScreenSettings(broad_sigma_kms=(600.0,), n_refine=0, n_local=2)
+    coarse = quick_scan(spectrum, [RedshiftHypothesis(Z, "spe_galaxy", "halpha_complex")], settings)
+    refined = refine_redshifts_locally(spectrum, coarse, settings)
+    assert set(refined["origin"]) == {"spe_galaxy"}

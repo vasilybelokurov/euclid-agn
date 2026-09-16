@@ -186,3 +186,10 @@ def test_halpha_rest_wavelength_drives_the_peak_identification():
     z = 1.2
     observed = BY_NAME["Halpha"].rest * (1 + z)
     assert w[0] < observed < w[-1]
+
+
+def test_blind_grid_tests_every_visible_system_where_windows_overlap():
+    """At z=1.7 both the H-alpha and H-beta systems are visible; both must be tested."""
+    grid = blind_grid(z_min=1.69, z_max=1.71, step_kms=3000.0, require_broad=True)
+    systems = {h.system for h in grid}
+    assert {"halpha_complex", "hbeta_oiii"} <= systems

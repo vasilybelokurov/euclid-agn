@@ -23,7 +23,7 @@ import numpy as np
 import pandas as pd
 
 from euclid_agn.fit.hypotheses import blind_grid, deduplicate, from_catalogue
-from euclid_agn.fit.screen import ScreenSettings, quick_scan
+from euclid_agn.fit.screen import ScreenSettings, quick_scan, refine_redshifts_locally
 from euclid_agn.io.sir import open_sir_file
 from euclid_agn.validation.truth import agreement_summary, compare_redshifts
 
@@ -57,6 +57,7 @@ def blind_best_redshift(
     scan = quick_scan(spectrum, hypotheses, settings)
     if scan.empty:
         return None
+    scan = refine_redshifts_locally(spectrum, scan, settings)
     best = scan.loc[scan["delta_chi2_penalised"].idxmax()]
     runner_up = scan[scan["system"] != best["system"]]
     margin = (
