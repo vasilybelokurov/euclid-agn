@@ -127,6 +127,7 @@ from euclid_agn.models.narrow import NarrowSystem, velocity_grid
 from euclid_agn.models.templates import template_column, templates_for
 from euclid_agn.numerics import blas_safe
 from euclid_agn.spectra.continuum import bspline_basis
+from euclid_agn.spectra.outliers import isolated_outliers
 
 log = logging.getLogger(__name__)
 
@@ -155,6 +156,10 @@ class ScreenSettings:
     #: chi-squared.  The default is the measured slope of the null maximum
     #: against the number of components; see the module docstring.
     component_penalty: float = 6.6
+    #: Robust rejection of narrow outlier pixels the archive mask leaves in
+    #: (see :mod:`euclid_agn.spectra.outliers`).  ``0`` disables it.
+    outlier_threshold: float = 5.0
+    outlier_max_width: int = 2
     #: Which statistic ranks hypotheses.  ``"template"`` uses the best
     #: fixed-ratio template (one free amplitude, see
     #: :mod:`euclid_agn.models.templates`) plus the broad gain;
@@ -201,6 +206,7 @@ class ProjectedSpectrum:
     lsf_sigma: float
     chi2_continuum: float
     edges: np.ndarray | None = None  # pixel edges, computed once in prepare()
+    n_outliers: int = 0  # narrow outlier pixels rejected before fitting
 
     def __post_init__(self) -> None:
         if self.edges is None:
@@ -244,6 +250,18 @@ def prepare(spectrum, settings: ScreenSettings = ScreenSettings()) -> ProjectedS
         spectrum.wavelength <= settings.wavelength_max
     )
     keep = usable & window
+    n_outliers = 0
+    if settings.outlier_threshold > 0:
+        outliers = isolated_outliers(
+            spectrum.flux,
+            spectrum.variance,
+            keep,
+            threshold=settings.outlier_threshold,
+            max_width=settings.outlier_max_width,
+            lsf_sigma_pixels=float(spectrum.lsf_sigma) / float(spectrum.bin_width),
+        )
+        n_outliers = int(np.count_nonzero(outliers))
+        keep &= ~outliers
     if np.count_nonzero(keep) < settings.min_usable_pixels:
         return None
 
@@ -264,6 +282,7 @@ def prepare(spectrum, settings: ScreenSettings = ScreenSettings()) -> ProjectedS
         bin_width=float(spectrum.bin_width),
         lsf_sigma=float(spectrum.lsf_sigma),
         chi2_continuum=float(residual @ residual),
+        n_outliers=n_outliers,
     )
 
 
@@ -587,11 +606,7 @@ def refine(
         if broad_names
         else None
     )
-    usable = spectrum.usable()
-    window = (spectrum.wavelength >= settings.wavelength_min) & (
-        spectrum.wavelength <= settings.wavelength_max
-    )
-    keep = usable & window
+    keep = np.isin(spectrum.wavelength, projected.wavelength)
     return fit_hypothesis(
         spectrum.wavelength[keep],
         spectrum.flux[keep],
@@ -724,6 +739,7 @@ def screen_spectrum(
         return pd.DataFrame()
     scan = scan.reset_index(drop=True)
     scan = refine_redshifts_locally(spectrum, scan, settings)
+    projected_for_rows = prepare(spectrum, settings)
     selected = select_for_refinement(scan, settings.n_refine)
 
     quality = spectrum.quality_metrics()
@@ -755,6 +771,7 @@ def screen_spectrum(
             "rank_by": settings.rank_by,
             "n_components": candidate["n_components"],
             "noise_inflation": noise_inflation,
+            "n_outlier_pixels": projected_for_rows.n_outliers if projected_for_rows else 0,
             "delta_chi2_effective": float(candidate["delta_chi2_broad"]) / noise_inflation**2,
             "broad_continuum_orthogonality": candidate["broad_continuum_orthogonality"],
             "broad_sigma_max_identifiable_kms": candidate["broad_sigma_max_identifiable_kms"],

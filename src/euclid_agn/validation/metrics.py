@@ -65,8 +65,12 @@ def blind_best_redshift(
         if not runner_up.empty
         else float("inf")
     )
+    from euclid_agn.fit.screen import prepare
+
+    projected = prepare(spectrum, settings)
     return {
         "z": float(best["z"]),
+        "n_outlier_pixels": projected.n_outliers if projected is not None else 0,
         "origin": str(best["origin"]),
         "system": str(best["system"]),
         "n_narrow_lines": int(best["n_narrow_lines"]),
