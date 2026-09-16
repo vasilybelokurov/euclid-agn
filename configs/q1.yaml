@@ -1,0 +1,50 @@
+# Q1 production configuration.
+# Every number that can change a scientific result belongs here; the file is
+# hashed into run_manifest.json.
+name: q1
+
+archive:
+  backend: irsa
+  release: q1
+  anon_s3: true
+  tap_timeout_s: 900.0
+
+selection:
+  # Data availability only. No host colour, mass, morphology or class.
+  field: EDF-N
+  tile_ids: []
+  object_ids: []
+  limit: null
+  min_usable_pixel_fraction: 0.5
+  wavelength_min: 12500.0
+  wavelength_max: 18500.0
+  reject_mask_bits: [NOT_USE]
+
+continuum:
+  kind: bspline
+  n_knots: 8
+  degree: 3
+  smoothness: 0.0
+
+narrow:
+  velocity_half_width_kms: 1200.0
+  velocity_step_kms: 100.0
+  smoothness_lambda: 1.0
+  non_negative: true
+
+broad:
+  sigma_min_kms: 300.0
+  sigma_max_kms: 6000.0
+  sigma_grid_n: 12
+  velocity_offset_max_kms: 1500.0
+  allowed_transitions: [Halpha, Hbeta, Pabeta, Pagamma, HeI10830, MgII2796]
+
+screening:
+  redshift_sources: [spe, phz, peaks, blind]
+  blind_z_min: 0.0
+  blind_z_max: 5.7
+  blind_z_step_kms: 300.0
+  noise_scale_free: true
+
+output_dir: outputs
+seed: 20260916

@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "euclid-agn"
+version = "0.1.0"
+description = "Host-unbiased AGN search in Euclid NISP slitless spectra"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Vasily Belokurov", email = "vasily@ast.cam.ac.uk" }]
+dependencies = [
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "astropy>=6.0",
+    "fsspec>=2024.2",
+    "s3fs>=2024.2",
+    "pyarrow>=14",
+    "pandas>=2.1",
+    "pydantic>=2.5",
+    "pyyaml>=6.0",
+    "typer>=0.9",
+    "matplotlib>=3.8",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4", "hypothesis>=6.90", "ruff>=0.4", "mypy>=1.8"]
+
+[project.scripts]
+euclid-agn = "euclid_agn.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "online: test requires network access to IRSA/ESA (deselect with '-m \"not online\"')",
+    "slow: test takes more than a few seconds",
+]
+addopts = "-m 'not online'"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "NPY"]

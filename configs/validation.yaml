@@ -1,0 +1,20 @@
+# Injection/recovery and null-test configuration.
+name: validation
+
+archive:
+  backend: irsa
+  release: q1
+
+selection:
+  field: EDF-N
+  limit: 2000
+
+validation:
+  n_injections: 1000
+  seed: 20260916
+  broad_flux_dex_range: [-18.0, -15.0]
+  broad_fwhm_kms_range: [800.0, 8000.0]
+  redshift_range: [0.9, 1.8]
+
+output_dir: outputs/validation
+seed: 20260916

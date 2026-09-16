@@ -1,0 +1,19 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+.DS_Store
+
+# Derived products are reproducible from the archive + config + run manifest.
+outputs/
+data/manifests/*.parquet
+data/manifests/*_shards/
+data/manifests/run_manifest.json
+data/cache/
+
+# Raw Euclid FITS are never committed; tests/data/ holds the one small
+# frozen fixture deliberately.
+*.fits
+!tests/data/*.fits
