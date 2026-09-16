@@ -22,7 +22,7 @@ PACKAGES_RECORDED = ("numpy", "scipy", "astropy", "pandas", "pyarrow", "s3fs", "
 #: Bump when the spectral model changes in a way that alters fitted numbers.
 MODEL_VERSION = "0.1.0"
 #: Bump when the rest-wavelength list or line families change.
-LINE_LIST_VERSION = "0.1.0"
+LINE_LIST_VERSION = "0.2.0"
 
 
 def git_commit(repo: str | Path | None = None) -> str | None:

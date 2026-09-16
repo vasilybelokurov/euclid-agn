@@ -220,6 +220,40 @@ def noise_audit(
     typer.echo(json.dumps(payload, indent=2, default=float))
 
 
+@app.command("screen")
+def screen(
+    manifest: Path = typer.Option(..., help="Source manifest parquet"),
+    output: Path = typer.Option(..., help="Output parquet path"),
+    config: Path = typer.Option(None, help="YAML config"),
+    object_id: list[int] = typer.Option(None, help="Restrict to these object ids"),
+    object_id_file: Path = typer.Option(None, help="File with one object id per line"),
+    limit: int = typer.Option(None, help="Stop after this many sources"),
+    overwrite: bool = typer.Option(False, help="Re-screen files that already have a shard"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Stage 1: screen every usable spectrum in a manifest for broad lines."""
+    _setup_logging(verbose)
+    from euclid_agn.pipeline.screening import screen_manifest
+
+    cfg = _load_config(config)
+    results = screen_manifest(
+        cfg,
+        manifest,
+        output,
+        object_ids=_object_ids(object_id, object_id_file) or None,
+        limit=limit,
+        overwrite=overwrite,
+    )
+    summary = {"n_rows": int(len(results))}
+    if not results.empty:
+        summary["n_objects"] = int(results["object_id"].nunique())
+        summary["median_delta_chi2_effective"] = float(
+            results["delta_chi2_refined_effective"].median()
+        )
+        summary["n_above_25"] = int((results["delta_chi2_refined_effective"] > 25).sum())
+    typer.echo(json.dumps(summary, indent=2, default=float))
+
+
 @app.command("version")
 def version() -> None:
     """Print package and model versions."""

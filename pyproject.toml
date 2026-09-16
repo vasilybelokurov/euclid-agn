@@ -39,6 +39,11 @@ markers = [
     "slow: test takes more than a few seconds",
 ]
 addopts = "-m 'not online'"
+filterwarnings = [
+    # numpy built against Apple Accelerate raises these on ordinary finite
+    # matrix products; see euclid_agn.numerics for the verification.
+    "ignore:.*encountered in matmul:RuntimeWarning",
+]
 
 [tool.ruff]
 line-length = 100

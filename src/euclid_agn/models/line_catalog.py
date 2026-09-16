@@ -13,6 +13,21 @@ the question, but the median is 0.2 A from vacuum and 1.6 A from air.
 
 Line-list version is tracked in :data:`euclid_agn.provenance.LINE_LIST_VERSION`;
 bump it whenever this file changes.
+
+Broad-line redshift coverage
+----------------------------
+A redshift can only be tested for a BLR if a *permitted* line that belongs to
+some system falls inside the covered range.  Auditing that condition over
+12500-18500 Angstrom showed that H-delta, Pa-delta, He II 4686 and C III] 1909
+were permitted but belonged to no system, leaving the branch blind over
+3.26 < z < 3.47.  They are now members, and the only remaining untestable
+interval below z = 5.6 is
+
+    0.840 < z < 0.904
+
+between Pa-delta leaving the red end and H-alpha entering it.  That gap is a
+property of the grism, not of the software, and belongs in the published
+selection function.
 """
 
 from __future__ import annotations
@@ -128,9 +143,9 @@ SYSTEMS: tuple[LineSystem, ...] = (
     ),
     LineSystem(
         "hbeta_oiii",
-        ("Hbeta", "OIII4959", "OIII5007", "OIII4363", "Hgamma"),
-        ("Hbeta", "Hgamma"),
-        "z ~ 1.50-2.81",
+        ("Hbeta", "OIII4959", "OIII5007", "OIII4363", "Hgamma", "Hdelta", "HeII4686"),
+        ("Hbeta", "Hgamma", "Hdelta", "HeII4686"),
+        "z ~ 1.50-3.51; H-delta carries the branch to the Mg II window",
     ),
     LineSystem(
         "paschen_beta",
@@ -141,11 +156,12 @@ SYSTEMS: tuple[LineSystem, ...] = (
     LineSystem(
         "helium_paschen_gamma",
         ("HeI10830", "Pagamma", "Padelta"),
-        ("HeI10830", "Pagamma"),
-        "z ~ 0.14-0.71",
+        ("HeI10830", "Pagamma", "Padelta"),
+        "z ~ 0.14-0.84",
     ),
     LineSystem("oii_neiii", ("OII3726", "OII3729", "NeIII3869"), (), "z ~ 2.35-3.96"),
     LineSystem("mgii", ("MgII2796", "MgII2803"), ("MgII2796", "MgII2803"), "z ~ 3.47-5.61"),
+    LineSystem("ciii", ("CIII1909",), ("CIII1909",), "z ~ 5.55-8.69; only its low edge is in range"),
 )
 
 BY_SYSTEM: dict[str, LineSystem] = {s.name: s for s in SYSTEMS}

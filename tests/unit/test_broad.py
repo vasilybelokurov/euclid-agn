@@ -111,3 +111,29 @@ def test_sigma_grid_is_logarithmic_and_bounded():
     assert np.allclose(ratios, ratios[0])
     with pytest.raises(ValueError):
         sigma_grid(600.0, 300.0)
+
+
+def test_contained_fraction_is_one_well_inside_the_range():
+    w = sir_wavelength_grid()
+    c = component(sigma_kms=1200.0)  # Halpha at z=1.2, mid-range
+    assert c.contained_fraction(w, SIR_BINWIDTH_ANGSTROM) > 0.99
+
+
+def test_contained_fraction_falls_at_the_edge():
+    """The failure mode from the first real-data pilot: a broad line on the edge."""
+    w = sir_wavelength_grid()
+    z_edge = w[-1] / 6564.61 - 1.0  # Halpha exactly at the red edge
+    edge = BroadComponent(line_name="Halpha", z=z_edge, sigma_kms=2000.0, lsf_sigma=LSF)
+    assert edge.contained_fraction(w, SIR_BINWIDTH_ANGSTROM) == pytest.approx(0.5, abs=0.1)
+
+
+def test_contained_fraction_falls_with_width_at_a_fixed_offset():
+    w = sir_wavelength_grid()
+    z_near_edge = (w[-1] - 200.0) / 6564.61 - 1.0
+    values = [
+        BroadComponent(
+            line_name="Halpha", z=z_near_edge, sigma_kms=sigma, lsf_sigma=LSF
+        ).contained_fraction(w, SIR_BINWIDTH_ANGSTROM)
+        for sigma in (300.0, 1500.0, 4000.0)
+    ]
+    assert values == sorted(values, reverse=True)

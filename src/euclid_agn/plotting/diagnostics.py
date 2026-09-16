@@ -192,3 +192,73 @@ def plot_availability(table, path: str | Path, min_usable_fraction: float = 0.5)
     fig.savefig(path, dpi=140)
     plt.close(fig)
     return path
+
+
+def plot_hypothesis_fit(
+    wavelength,
+    flux,
+    variance,
+    fit,
+    path: str | Path,
+    title: str | None = None,
+) -> Path:
+    """Data with the M0 and M1 models overlaid, and the normalised residuals.
+
+    The point of the figure is to show *where* the broad component is doing
+    work. A Δχ² that comes from a handful of pixels far from the line, or from
+    a slow bend across the whole range, is continuum mismatch however large it
+    is.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    wavelength = np.asarray(wavelength, dtype=float)
+    flux = np.asarray(flux, dtype=float)
+    sigma = np.sqrt(np.asarray(variance, dtype=float))
+
+    fig, axes = plt.subplots(
+        2, 1, figsize=(10, 5.5), sharex=True, gridspec_kw={"height_ratios": [2.2, 1]}
+    )
+    ax = axes[0]
+    ax.fill_between(wavelength, flux - sigma, flux + sigma, color="0.85", lw=0)
+    ax.plot(wavelength, flux, lw=0.8, color="0.35", label="data")
+    ax.plot(wavelength, fit.m0.model, lw=1.2, color="tab:blue", label="M0 continuum + narrow")
+    if fit.m1 is not None:
+        ax.plot(wavelength, fit.m1.model, lw=1.2, color="tab:red", label="M1 + broad")
+        broad_block = fit.blocks_m1.design[:, fit.blocks_m1.slices["broad"]]
+        broad_coefficients = fit.blocks_m1.block(fit.m1, "broad")
+        ax.plot(
+            wavelength,
+            broad_block @ broad_coefficients,
+            lw=1.0,
+            ls="--",
+            color="tab:red",
+            label="broad component",
+        )
+    ax.set_ylabel(r"$f_\lambda$")
+    ax.legend(fontsize=8, loc="upper right")
+
+    ax = axes[1]
+    residual_m0 = (flux - fit.m0.model) / sigma
+    ax.plot(wavelength, residual_m0, lw=0.8, color="tab:blue")
+    if fit.m1 is not None:
+        ax.plot(wavelength, (flux - fit.m1.model) / sigma, lw=0.8, color="tab:red")
+    ax.axhline(0.0, color="0.5", lw=0.8)
+    ax.set_ylabel("residual / $\\sigma$")
+    ax.set_xlabel(r"observed wavelength [$\AA$]")
+
+    summary = fit.summary()
+    header = (
+        f"z={summary['z']:.4f}  "
+        f"$\\Delta\\chi^2$={summary['delta_chi2']:.1f}  "
+        f"LSF $\\sigma$={summary['lsf_sigma_angstrom']:.1f} $\\AA$"
+    )
+    if "broad_fwhm_kms" in summary:
+        header += (
+            f"  FWHM={summary['broad_fwhm_kms']:.0f} km/s"
+            f"  width/LSF={summary['broad_resolution_ratio']:.1f}"
+        )
+    fig.suptitle(title or header, fontsize=10)
+    fig.tight_layout()
+    fig.savefig(path, dpi=140)
+    plt.close(fig)
+    return path

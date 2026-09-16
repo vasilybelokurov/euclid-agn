@@ -29,6 +29,7 @@ from euclid_agn.spectra.lsf import (
     FWHM_OVER_SIGMA,
     effective_sigma,
     gaussian_pixel_integral,
+    pixel_edges,
     sigma_angstrom_to_kms,
     sigma_kms_to_angstrom,
 )
@@ -133,6 +134,24 @@ class BroadComponent:
         return bool(
             (self.centre >= wavelength[0] - reach) and (self.centre <= wavelength[-1] + reach)
         )
+
+    def contained_fraction(self, wavelength: np.ndarray, bin_width: float | None = None) -> float:
+        """Fraction of the line's flux that falls on covered pixels.
+
+        A broad component near an edge is mostly outside the data, so its
+        amplitude is set by a truncated wing and is free to absorb whatever
+        edge artefact happens to be there.  The first real-data pilot produced
+        exactly that: its best candidate was a broad profile centred at
+        18200 Angstrom on the red edge of the grism.  Requiring most of the
+        profile to be observed removes the failure without removing genuine
+        lines, which sit well inside the range.
+        """
+        wavelength = np.asarray(wavelength, dtype=np.float64)
+        if wavelength.size == 0:
+            return 0.0
+        profile = self.basis(wavelength, bin_width)
+        widths = np.diff(pixel_edges(wavelength, bin_width))
+        return float(np.sum(profile * widths))
 
 
 @dataclass(frozen=True)
