@@ -16,6 +16,23 @@ File layout VERIFIED against
 number of HDUs per object varies with the number of contributing dithers, so
 groups must be discovered from EXTNAME rather than assumed.
 
+Two properties of real files that are easy to get wrong:
+
+**N_OBJ is not the number of objects in the file.**  VERIFIED: one Q1 file for
+tile 102160339 carries ``N_OBJ = 1000`` and contains 1000 object groups, while
+another file of the same tile also carries ``N_OBJ = 1000`` and contains 159.
+Use :attr:`SirCombinedSpectraFile.n_objects`, which counts discovered groups;
+``n_objects_header`` is kept only for provenance.
+
+**OBJ_ID is signed and is negative in the southern fields.**  The MER identifier
+encodes the source position: 2731173428682078045 is RA 273.1173428,
+Dec +68.2078045, and -638864563487453476 is RA 63.8864563, Dec -48.7453476.
+Sources south of the equator therefore have negative identifiers, in the FITS
+headers and in the TAP catalogues alike (VERIFIED against
+``euclid.objectid_spectrafile_association_q1`` and ``euclid_q1_mer_catalogue``
+for tile 102021017).  Never validate an object id by requiring it to be
+positive, and never store one in an unsigned column.
+
 Flux scaling
 ------------
 ``SIGNAL`` and ``VAR`` are stored in units of ``FSCALE``.  The DPDD states that
@@ -92,6 +109,7 @@ class SirCombinedSpectraFile:
         self._extnames: list[str] = [h.name for h in hdulist]
         self._groups: dict[int, ObjectHduGroup] | None = None
         self._by_object_id: dict[int, int] | None = None
+        self._duplicate_object_ids: tuple[int, ...] = ()
 
     # -- file level -------------------------------------------------------
     @property
@@ -104,7 +122,23 @@ class SirCombinedSpectraFile:
 
     @property
     def n_objects_header(self) -> int:
+        """The ``N_OBJ`` keyword.
+
+        Provenance only: real files carry a nominal value that can exceed the
+        number of object groups actually present.  Use :attr:`n_objects`.
+        """
         return int(self.primary_header["N_OBJ"])
+
+    @property
+    def n_objects(self) -> int:
+        """Number of object groups actually present in the file."""
+        return len(self.groups())
+
+    @property
+    def duplicate_object_ids(self) -> tuple[int, ...]:
+        """Object ids appearing in more than one group, if any."""
+        self.groups()
+        return self._duplicate_object_ids
 
     @property
     def grism_combination(self) -> str:
@@ -134,6 +168,7 @@ class SirCombinedSpectraFile:
                 dcon.setdefault(int(m.group(1)), {})[int(m.group(2))] = i
         groups: dict[int, ObjectHduGroup] = {}
         by_id: dict[int, int] = {}
+        duplicates: list[int] = []
         for idx, meta_hdu in sorted(meta.items()):
             if idx not in combined:
                 continue
@@ -146,9 +181,12 @@ class SirCombinedSpectraFile:
                 dither_signal_hdus=dict(sorted(dsig.get(idx, {}).items())),
                 dither_contam_hdus=dict(sorted(dcon.get(idx, {}).items())),
             )
+            if object_id in by_id:
+                duplicates.append(object_id)
             by_id[object_id] = idx
         self._groups = groups
         self._by_object_id = by_id
+        self._duplicate_object_ids = tuple(sorted(set(duplicates)))
         return groups
 
     def object_ids(self) -> list[int]:

@@ -425,3 +425,108 @@ Headline synthetic results now in the suite:
    any Δχ² is turned into a significance.
 4. First Stage-1 run on a curated EDF-N subset, with DESI labels from
    `~/data/euclid/with_desi/desi_euclid_q1_galaxies.fits` held back.
+
+---
+
+## 2026-09-16 — session 3: noise model measured, ID convention corrected
+
+### The Q1 noise model is not what a naive chi-squared assumes
+
+Q1 supplies a per-pixel variance and no covariance, and SIR resamples dispersed
+2D data onto a common 1D grid, which must correlate neighbouring pixels.  Both
+effects were measured on **934 real combined spectra** from eight cached tile
+files across EDF-N, EDF-S and EDF-F (`euclid-agn spectra noise-audit`,
+table `outputs/noise_audit.parquet`).
+
+Method: fit a smooth B-spline continuum on the longest contiguous run of usable
+pixels inside 12500-18500 Angstrom, form `r = (f - continuum) / sqrt(VAR)`,
+clip beyond 4 sigma so emission lines are not counted as noise, then take the
+standard deviation and the autocorrelation of what remains.
+
+The procedure has a bias of its own - a continuum with p free parameters
+absorbs part of the noise - so it was **calibrated on simulated white noise with
+exact variances** (`measure_method_bias`), and the bias divided out.  The
+control recovers `sigma_r = 0.963`, `rho_1 = -0.060` at 25 knots instead of the
+ideal 1.0 and 0.0, confirming the bias is small and downward.
+
+Bias-corrected results, as a function of how flexible the continuum is allowed
+to be (531 pixels on the full grid, ~450 usable):
+
+| interior knots | pixels per knot | sigma_r | rho_1 | inflation eta | chi2 scale eta^2 |
+|---:|---:|---:|---:|---:|---:|
+| 8 | ~56 | 1.265 | +0.229 | 1.53 | 2.33 |
+| 12 | ~37 | 1.241 | +0.219 | 1.49 | 2.22 |
+| 25 | ~18 | 1.204 | +0.184 | 1.41 | 1.98 |
+| 50 | ~9 | 1.147 | +0.128 | 1.29 | 1.65 |
+
+Reading the table honestly: some of the excess is genuine smooth structure that
+a stiff continuum fails to follow, which is why the numbers fall as knots are
+added; but 50 knots on 450 pixels is already absorbing real noise, so the truth
+is bracketed rather than pinned.  At the defensible middle of the range:
+
+> **Reported variances are too small by a factor of about 1.45, adjacent pixels
+> are positively correlated at rho_1 = +0.18, and a naive Delta chi-squared
+> overstates the evidence for an added component by a factor of about 2
+> (bracketed 1.65-2.33).**
+
+The spread between objects is larger than the spread between methods: the 84th
+percentile of the per-spectrum inflation is 1.78, i.e. a chi-squared scale of
+3.2.  Lags of 2 and beyond come out slightly negative (-0.07 to -0.11), the
+expected signature of having removed a smooth component, not evidence of
+anti-correlated noise.
+
+Consequences, which were already the plan but are now quantified:
+
+- a Delta chi-squared of 25 - a naive "5 sigma" - corresponds to an effective
+  value near 12, i.e. roughly 3.5 sigma, *before* accounting for the fact that
+  the broad flux is bounded at zero and many hypotheses are scanned per object;
+- because the inflation varies by object, a single global correction is not
+  enough; the per-spectrum inflation belongs in the candidate table as a
+  covariate, and final significances still have to come from empirical nulls;
+- a fitted noise-scale nuisance parameter in the likelihood is justified by
+  measurement, not by taste.
+
+### Object identifiers are signed, and negative in the south
+
+Auditing the cached files turned up whole tiles whose `OBJ_ID` values are
+negative, e.g. -638864563487453476.  This is **not** corruption.  The MER
+identifier encodes the source position:
+
+```
+ 2731173428682078045  ->  RA 273.1173428  Dec +68.2078045   (EDF-N)
+-638864563487453476   ->  RA  63.8864563  Dec -48.7453476   (EDF-S)
+```
+
+Sources south of the equator carry negative identifiers, consistently in the
+FITS headers and in the TAP catalogues (checked against both
+`euclid.objectid_spectrafile_association_q1` and `euclid_q1_mer_catalogue` for
+tile 102021017).  Since EDF-S and EDF-F together hold 2 623 547 of the
+4 307 177 Q1 spectra, *the majority of the parent sample has a negative object
+id*.  Any code that validates an id by requiring it to be positive, or stores
+one in an unsigned column, will silently drop most of the survey.  A unit test
+now round-trips a southern identifier, and the earlier test that asserted
+`object_id > 0` has been corrected.
+
+### N_OBJ is a nominal value
+
+Also verified: the primary-header `N_OBJ` is not the number of objects in the
+file.  One Q1 file for tile 102160339 carries `N_OBJ = 1000` and holds 1000
+object groups; another file of the same tile carries `N_OBJ = 1000` and holds
+159.  `SirCombinedSpectraFile.n_objects` now counts discovered groups, and
+`n_objects_header` is retained for provenance only.
+
+One outlier file was noted and set aside: the cached file for tile 102018211
+was written by SIR 5.0.5 rather than 5.0.6, holds 5 object groups against
+`N_OBJ = 465`, and every one of its spectra is completely masked.
+
+### Test results
+
+- Offline suite: **169 passed, 5 deselected**, 1.3 s.
+
+### Next actions
+
+1. `fit/hypotheses.py`: redshift hypotheses from SPE, PHZ, detected peaks and a
+   blind line-family scan, each tagged with its origin.
+2. `fit/screen.py`: Stage-1 scan over the small non-linear space, carrying the
+   per-spectrum noise inflation into the recorded statistics.
+3. First Stage-1 run on a curated EDF-N subset with DESI labels held back.

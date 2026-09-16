@@ -86,6 +86,15 @@ recorded in `JOURNAL.md` with the command used.
   6564.39 Å from 400 Q1 SPE detections; vacuum 6564.61, air 6562.80).
 - The four Q1 field cones select 352 tiles, exactly the number of distinct Q1
   tiles, so they partition the release.
+- **A naive Δχ² overstates the evidence by a factor of about 2.** Measured on
+  934 real spectra: reported variances are too small by ~1.45× and adjacent
+  pixels are correlated at ρ₁ = +0.18 (bias-corrected against a white-noise
+  control). Per-object inflation varies, so it is a catalogue covariate, not a
+  global constant.
+- **Object ids are signed and negative south of the equator** — the id encodes
+  position, so EDF-S and EDF-F, which hold 61 % of Q1 spectra, have negative
+  ids. Validating an id as positive would drop most of the survey.
+- `N_OBJ` in a SIR primary header is nominal, not the number of objects present.
 - Masking dominates usability: the IRSA tutorial reference object
   (2731173428682078045) is 98.3 % `NOT_USE`-masked, leaving nine pixels at the
   red edge, while a compact neighbour keeps 98.9 % of its spectrum. Selecting on

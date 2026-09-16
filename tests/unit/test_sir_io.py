@@ -17,10 +17,35 @@ from euclid_agn.io.sir import (
 def test_extension_discovery_finds_every_object(sir_test_file):
     with open_sir_file(sir_test_file) as sir:
         groups = sir.groups()
-        assert len(groups) == sir.n_objects_header == 3
+        assert len(groups) == sir.n_objects == 3
         for group in groups.values():
             assert group.n_dither_hdus == len(group.dither_contam_hdus)
-            assert group.object_id > 0
+            assert group.object_id != 0
+        assert sir.duplicate_object_ids == ()
+
+
+def test_negative_object_ids_are_first_class(tmp_path):
+    """MER ids encode position and are negative south of the equator.
+
+    Verified in Q1 tile 102021017: OBJ_ID -638864563487453476 is
+    RA 63.8864563, Dec -48.7453476, and TAP returns the same negative value.
+    """
+    from euclid_agn.validation.simulator import (
+        SpectrumTruth,
+        simulate_observation,
+        write_sir_file,
+    )
+
+    southern = -638864563487453476
+    observation = simulate_observation(
+        SpectrumTruth(object_id=southern, ra=63.8864563, dec=-48.7453476, n_dithers=2, seed=1)
+    )
+    path = write_sir_file(tmp_path / "south.fits", [observation], tile_id=102021017)
+    with open_sir_file(path) as sir:
+        assert sir.object_ids() == [southern]
+        recovered = sir.read_observation(southern)
+        assert recovered.object_id == southern
+        assert recovered.source.dec < 0
 
 
 def test_hdu_count_per_object_varies_with_dithers(sir_test_file):

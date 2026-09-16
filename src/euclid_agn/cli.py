@@ -175,6 +175,51 @@ def inspect(
         typer.echo(f"wrote {plot}")
 
 
+@spectra_app.command("noise-audit")
+def noise_audit(
+    path: list[Path] = typer.Option(None, help="Local SIR file (repeatable)"),
+    tile: list[int] = typer.Option(None, help="Tile id to fetch and audit (repeatable)"),
+    config: Path = typer.Option(None, help="YAML config"),
+    n_knots: int = typer.Option(25, help="Continuum flexibility used to form residuals"),
+    max_objects: int = typer.Option(None, help="Objects per file"),
+    output: Path = typer.Option(None, help="Write the per-spectrum audit table here"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Measure residual scatter and pixel-to-pixel correlation in real spectra.
+
+    Reports the factor by which a naive chi-squared, built from the reported
+    variances and an assumption of independent pixels, is wrong.
+    """
+    _setup_logging(verbose)
+    import pandas as pd
+
+    from euclid_agn.pipeline.noise import audit_file, corrected_summary, measure_method_bias
+
+    files = [str(p) for p in (path or [])]
+    if tile:
+        from euclid_agn.pipeline.ingest import make_backend
+
+        backend = make_backend(_load_config(config))
+        for tile_id in tile:
+            locations = backend.query_spectrum_locations(tile_id=tile_id, limit=1)
+            if locations:
+                files.append(str(backend.download_file(locations[0])))
+    if not files:
+        typer.echo("nothing to audit: pass --path or --tile")
+        raise typer.Exit(code=1)
+
+    tables = [audit_file(f, n_knots=n_knots, max_objects=max_objects) for f in files]
+    table = pd.concat([t for t in tables if not t.empty], ignore_index=True)
+    bias = measure_method_bias(n_knots=n_knots)
+    payload = corrected_summary(table, bias)
+    payload["n_files"] = len(files)
+    if output:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        table.to_parquet(output, index=False)
+        payload["table"] = str(output)
+    typer.echo(json.dumps(payload, indent=2, default=float))
+
+
 @app.command("version")
 def version() -> None:
     """Print package and model versions."""
