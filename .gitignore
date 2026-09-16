@@ -8,6 +8,7 @@ __pycache__/
 
 # Derived products are reproducible from the archive + config + run manifest.
 outputs/
+# plots/ is committed: the atlas is part of the record.
 data/manifests/*.parquet
 data/manifests/*_shards/
 data/manifests/run_manifest.json

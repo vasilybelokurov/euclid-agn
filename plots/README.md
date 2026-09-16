@@ -1,0 +1,32 @@
+# plots/
+
+PNG figures, all regenerable:
+
+```bash
+export PYTHONPATH=src
+python -m euclid_agn plot \
+    --screen outputs/screen_pilot_v3.parquet \
+    --glob '~/data/euclid/q1/SIR/*/*.fits' \
+    --directory plots --n-candidates 8
+```
+
+| file | what it shows |
+|---|---|
+| `candidate_grid.png` | the top Stage-1 candidates, zoomed on the broad line under test. Grey data, blue M0 (continuum + narrow), red M1 (all components), dashed red M1 continuum + broad only. |
+| `screen_statistics.png` | where the detection statistic sits in the population, the M0 goodness of fit against the independently measured noise inflation, the statistic against continuum orthogonality, and the recovered widths. |
+| `availability_sample.png` | the Q1 parent sample: usable pixel fraction, continuum S/N, effective LSF and dither count over 1214 real spectra. |
+| `fits/fit_<object_id>.png` | one candidate in full: data, both models, the broad component on the M1 continuum, and the normalised residuals of both models. |
+| `spectra/spectrum_<object_id>.png` | one object's combined spectrum above each contributing dither, with unusable pixels shaded and contaminant counts labelled. |
+
+Two reference objects are included for orientation:
+
+- `spectra/spectrum_2731173428682078045.png` — the IRSA tutorial object, an
+  extended galaxy that is 98.3 % masked, with nine usable pixels at the red edge;
+- `spectra/spectrum_2734482961680140786.png` — a compact, high signal-to-noise
+  source, where the per-dither panels show narrow spikes that differ between
+  dithers and largely vanish on co-addition.
+
+**Nothing in `fits/` is a detection.** The Stage-1 statistic is uncalibrated;
+`screen_statistics.png` shows that a nominal Δχ² = 25 sits near the 95th
+percentile of unselected spectra. Reading these figures is how three separate
+failure modes were found — see `JOURNAL.md`.

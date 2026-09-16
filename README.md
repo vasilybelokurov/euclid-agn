@@ -59,6 +59,19 @@ python -m euclid_agn archive availability --sample-tile 102157301
 Downloaded archive files are mirrored under `~/data/euclid/`, keeping the
 archive's own layout (`~/data/euclid/q1/SIR/<tile>/EUC_SIR_W-COMBSPEC_*.fits`).
 
+## Figures
+
+`plots/` holds a regenerable PNG atlas — candidate fits, per-dither spectra,
+parent-sample availability and the population distribution of the detection
+statistic. See `plots/README.md`.
+
+```bash
+python -m euclid_agn plot --screen outputs/screen_pilot_v3.parquet \
+    --glob '~/data/euclid/q1/SIR/*/*.fits' --directory plots
+```
+
+Nothing in `plots/fits/` is a detection: the Stage-1 statistic is uncalibrated.
+
 ## Tests
 
 ```bash

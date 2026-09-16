@@ -22,6 +22,21 @@ from euclid_agn.constants import (  # noqa: E402
 )
 
 
+def broad_on_continuum(fit) -> np.ndarray:
+    """M1 with its narrow lines removed: continuum plus the broad component.
+
+    Plotting the broad component on top of *M0's* continuum would be wrong, and
+    visibly so: M1 refits the continuum and the narrow lines in the presence of
+    the broad component, so the two continua differ.
+    """
+    design = fit.blocks_m1.design
+    coefficients = np.asarray(fit.m1.coefficients, dtype=float).copy()
+    narrow = fit.blocks_m1.slices.get("narrow")
+    if narrow is not None:
+        coefficients[narrow] = 0.0
+    return design @ coefficients
+
+
 def _finite_limits(values: np.ndarray, pad: float = 0.1) -> tuple[float, float]:
     finite = values[np.isfinite(values)]
     if finite.size == 0:
@@ -224,15 +239,13 @@ def plot_hypothesis_fit(
     ax.plot(wavelength, fit.m0.model, lw=1.2, color="tab:blue", label="M0 continuum + narrow")
     if fit.m1 is not None:
         ax.plot(wavelength, fit.m1.model, lw=1.2, color="tab:red", label="M1 + broad")
-        broad_block = fit.blocks_m1.design[:, fit.blocks_m1.slices["broad"]]
-        broad_coefficients = fit.blocks_m1.block(fit.m1, "broad")
         ax.plot(
             wavelength,
-            broad_block @ broad_coefficients,
+            broad_on_continuum(fit),
             lw=1.0,
             ls="--",
             color="tab:red",
-            label="broad component",
+            label="M1 continuum + broad",
         )
     ax.set_ylabel(r"$f_\lambda$")
     ax.legend(fontsize=8, loc="upper right")

@@ -254,6 +254,44 @@ def screen(
     typer.echo(json.dumps(summary, indent=2, default=float))
 
 
+@app.command("plot")
+def plot(
+    screen: Path = typer.Option(..., help="Screening results parquet"),
+    files: list[Path] = typer.Option(None, help="SIR files to read spectra from (repeatable)"),
+    glob: str = typer.Option(None, help="Glob of SIR files, e.g. '~/data/euclid/q1/SIR/*/*.fits'"),
+    directory: Path = typer.Option(Path("plots"), help="Output directory for PNGs"),
+    n_candidates: int = typer.Option(8, help="How many candidates to draw"),
+    no_dithers: bool = typer.Option(False, help="Skip the per-dither spectrum pages"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Write a PNG atlas of spectra and their fits."""
+    _setup_logging(verbose)
+    import glob as globmodule
+
+    import pandas as pd
+
+    from euclid_agn.plotting.atlas import build_atlas
+
+    paths = [str(f) for f in (files or [])]
+    if glob:
+        paths += sorted(globmodule.glob(str(Path(glob).expanduser())))
+    if not paths:
+        typer.echo("no SIR files given: pass --files or --glob")
+        raise typer.Exit(code=1)
+
+    table = pd.read_parquet(screen)
+    created = build_atlas(
+        table,
+        paths,
+        directory=directory,
+        n_candidates=n_candidates,
+        with_dithers=not no_dithers,
+    )
+    typer.echo(
+        json.dumps({k: len(v) for k, v in created.items()} | {"directory": str(directory)}, indent=2)
+    )
+
+
 @app.command("version")
 def version() -> None:
     """Print package and model versions."""

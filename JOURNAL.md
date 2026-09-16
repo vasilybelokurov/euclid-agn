@@ -671,3 +671,43 @@ outputs/screen_pilot*.parquet, outputs/candidate_*.png
 3. Report completeness against the measured degeneracy axes — broad width,
    continuum orthogonality, effective LSF, usable fraction, dither count —
    rather than a single flux-completeness curve.
+
+---
+
+## 2026-09-16 — session 5: diagnostic atlas
+
+`euclid-agn plot` writes a PNG atlas into `plots/`, regenerable from the
+screening table plus the cached archive files:
+
+```bash
+python -m euclid_agn plot --screen outputs/screen_pilot_v3.parquet \
+    --glob '~/data/euclid/q1/SIR/*/*.fits' --directory plots --n-candidates 8
+```
+
+| figure | content |
+|---|---|
+| `candidate_grid.png` | top candidates zoomed on the broad line under test |
+| `screen_statistics.png` | the statistic's population distribution and what drives it |
+| `availability_sample.png` | the parent sample: usable fraction, S/N, LSF, dithers |
+| `fits/fit_<id>.png` | one candidate: data, M0, M1, broad-on-continuum, residuals |
+| `spectra/spectrum_<id>.png` | combined spectrum above each contributing dither |
+
+**A plotting bug worth recording.** The first version drew the broad component
+on top of *M0's* continuum. That is not a decomposition of anything: M1 refits
+the continuum and the narrow lines in the presence of the broad component, so
+the two continua differ. The overlay is now M1 with its narrow block zeroed,
+and a test asserts the invariant that overlay + narrow reconstructs M1 exactly.
+On clean synthetic spectra the two versions agree closely, which is precisely
+why it needed a structural test rather than a numerical one.
+
+**What the figures show.** `screen_statistics.png` puts the median reduced
+chi-squared of M0 (2.08) next to the independently measured noise inflation
+(eta^2 = 1.98); the two lines nearly coincide. The recovered-width histogram is
+still bimodal at the extremes of the allowed grid, so even after the
+orthogonality cut some preference for the widest permitted width survives - the
+guard reduced the problem rather than removing it, and the residual is exactly
+what injection/recovery has to quantify.
+
+Reading the individual fits remains the fastest way to find a failure mode: the
+edge-artefact candidate of session 4 was obvious in one figure and invisible in
+the numbers.
