@@ -22,7 +22,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from euclid_agn.fit.hypotheses import blind_grid
+from euclid_agn.fit.hypotheses import blind_grid, deduplicate, from_catalogue
 from euclid_agn.fit.screen import ScreenSettings, quick_scan
 from euclid_agn.io.sir import open_sir_file
 from euclid_agn.validation.truth import agreement_summary, compare_redshifts
@@ -66,6 +66,7 @@ def blind_best_redshift(
     )
     return {
         "z": float(best["z"]),
+        "origin": str(best["origin"]),
         "system": str(best["system"]),
         "n_narrow_lines": int(best["n_narrow_lines"]),
         "delta_chi2_narrow": float(best["delta_chi2_narrow"]),
@@ -86,16 +87,28 @@ def blind_redshift_experiment(
     min_usable_fraction: float = 0.5,
     max_objects: int | None = None,
     reference_column: str = "spe_gal_z",
+    include_catalogue_hypotheses: bool = False,
 ) -> BlindRedshiftResult:
     """Run the blind scan over cached files and compare with a reference.
 
     Only data availability restricts the sample: a minimum usable-pixel
     fraction, and the existence of a reference redshift to compare against.
     No host property and no line-strength criterion enters the selection.
+
+    With ``include_catalogue_hypotheses`` the SPE and PHZ redshifts of each
+    object are added to the blind grid, as the production pipeline does.  That
+    is no longer a blind test of the machinery - agreement with SPE is then
+    partly by construction - but it measures what production will do, and the
+    origin of the winning hypothesis is recorded so the two can be separated.
     """
     settings = settings or ScreenSettings(n_refine=0)
     hypotheses = blind_grid(step_kms=step_kms)
     wanted = set(reference["object_id"].astype("int64"))
+    reference_rows = (
+        {int(r["object_id"]): r for _, r in reference.iterrows()}
+        if include_catalogue_hypotheses
+        else {}
+    )
     rows: list[dict] = []
     for path in files:
         with open_sir_file(str(path)) as sir:
@@ -106,7 +119,12 @@ def blind_redshift_experiment(
                 metrics = spectrum.quality_metrics()
                 if metrics["usable_pixel_fraction"] < min_usable_fraction:
                     continue
-                best = blind_best_redshift(spectrum, settings, hypotheses=hypotheses)
+                per_object = hypotheses
+                if include_catalogue_hypotheses:
+                    per_object = deduplicate(
+                        [*hypotheses, *from_catalogue(reference_rows[group.object_id])]
+                    )
+                best = blind_best_redshift(spectrum, settings, hypotheses=per_object)
                 if best is None:
                     continue
                 best.update(

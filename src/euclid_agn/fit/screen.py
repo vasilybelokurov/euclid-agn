@@ -126,7 +126,6 @@ from euclid_agn.models.line_catalog import BY_SYSTEM, LineSystem, visible_system
 from euclid_agn.models.narrow import NarrowSystem, velocity_grid
 from euclid_agn.numerics import blas_safe
 from euclid_agn.spectra.continuum import bspline_basis
-from euclid_agn.spectra.lsf import gaussian_pixel_integral
 
 log = logging.getLogger(__name__)
 
@@ -155,6 +154,11 @@ class ScreenSettings:
     #: chi-squared.  The default is the measured slope of the null maximum
     #: against the number of components; see the module docstring.
     component_penalty: float = 6.6
+    #: Optional per-system null offsets (median of the per-object maximum
+    #: Delta chi-squared within each system, measured on line-free spectra).
+    #: When given they replace the linear component penalty, which is a fit to
+    #: the same numbers and loses the per-system detail.
+    system_null_offsets: dict[str, float] | None = None
     narrow_velocity_half_width_kms: float = 1000.0
     narrow_velocity_step_kms: float = 250.0
     narrow_smoothness: float = 1.0
@@ -178,6 +182,26 @@ class ProjectedSpectrum:
     bin_width: float
     lsf_sigma: float
     chi2_continuum: float
+    edges: np.ndarray | None = None  # pixel edges, computed once in prepare()
+
+    def __post_init__(self) -> None:
+        if self.edges is None:
+            from euclid_agn.spectra.lsf import pixel_edges
+
+            self.edges = pixel_edges(self.wavelength, self.bin_width)
+        self.widths = np.diff(self.edges)
+
+    def line_column(self, centre: float, sigma_angstrom: float) -> np.ndarray:
+        """Unit-flux, pixel-integrated Gaussian on the cached pixel edges.
+
+        Identical to :func:`euclid_agn.spectra.lsf.gaussian_pixel_integral`
+        but without recomputing the edges for every one of the tens of
+        thousands of columns a blind scan builds.
+        """
+        from scipy.special import erf
+
+        z = (self.edges - centre) / (np.sqrt(2.0) * sigma_angstrom)
+        return np.diff(0.5 * (1.0 + erf(z))) / self.widths
 
     @blas_safe
     def project(self, columns: np.ndarray) -> np.ndarray:
@@ -269,9 +293,7 @@ def narrow_columns(
         if not (projected.wavelength[0] <= centre <= projected.wavelength[-1]):
             continue
         width = effective_sigma(sigma_kms_to_angstrom(sigma_kms, centre), projected.lsf_sigma)
-        columns.append(
-            gaussian_pixel_integral(projected.wavelength, centre, width, projected.bin_width)
-        )
+        columns.append(projected.line_column(centre, width))
         names.append(line.name)
     if not columns:
         return np.zeros((projected.wavelength.size, 0)), ()
@@ -301,8 +323,9 @@ def identifiable_sigmas(
 ) -> list[tuple[float, float]]:
     """Broad widths whose profile is distinguishable from the continuum.
 
-    Returns ``(sigma_kms, orthogonality)`` for the widths that pass
-    ``settings.min_broad_orthogonality``.
+    Returns ``(sigma_kms, orthogonality, column)`` for the widths that pass
+    ``settings.min_broad_orthogonality``; the zero-velocity column is returned
+    so the caller does not build it a second time.
     """
     out = []
     for sigma in settings.broad_sigma_kms:
@@ -313,7 +336,7 @@ def identifiable_sigmas(
             continue
         orthogonality = continuum_orthogonality(projected, column)
         if orthogonality >= settings.min_broad_orthogonality:
-            out.append((float(sigma), orthogonality))
+            out.append((float(sigma), orthogonality, column))
     return out
 
 
@@ -342,11 +365,10 @@ def broad_column(
     )
     if not component.in_range(projected.wavelength, n_sigma=1.0):
         return None
-    if min_containment > 0.0:
-        contained = component.contained_fraction(projected.wavelength, projected.bin_width)
-        if contained < min_containment:
-            return None
-    return component.basis(projected.wavelength, projected.bin_width)
+    column = projected.line_column(component.centre, component.observed_sigma_angstrom)
+    if min_containment > 0.0 and float(np.sum(column * projected.widths)) < min_containment:
+        return None
+    return column
 
 
 def quick_scan(
@@ -398,16 +420,20 @@ def quick_scan(
             for line_name in system.broad_members:
                 allowed = identifiable_sigmas(projected, line_name, hypothesis.z, settings)
                 if allowed:
-                    sigma_max = max(sigma_max, max(s for s, _ in allowed))
-                for sigma, orthogonality in allowed:
+                    sigma_max = max(sigma_max, max(s for s, _, _ in allowed))
+                for sigma, orthogonality, zero_velocity_column in allowed:
                     for velocity in settings.broad_velocity_kms:
-                        column = broad_column(
-                            projected,
-                            line_name,
-                            hypothesis.z,
-                            sigma,
-                            velocity,
-                            min_containment=settings.min_broad_containment,
+                        column = (
+                            zero_velocity_column
+                            if velocity == 0.0
+                            else broad_column(
+                                projected,
+                                line_name,
+                                hypothesis.z,
+                                sigma,
+                                velocity,
+                                min_containment=settings.min_broad_containment,
+                            )
                         )
                         if column is None:
                             continue
@@ -451,9 +477,14 @@ def quick_scan(
     table = pd.DataFrame(rows)
     if not table.empty:
         table["delta_chi2_total"] = table["delta_chi2_narrow"] + table["delta_chi2_broad"]
-        table["delta_chi2_penalised"] = (
-            table["delta_chi2_total"] - settings.component_penalty * table["n_components"]
-        )
+        if settings.system_null_offsets:
+            offsets = table["system"].map(settings.system_null_offsets)
+            fallback = settings.component_penalty * table["n_components"]
+            table["delta_chi2_penalised"] = table["delta_chi2_total"] - offsets.fillna(fallback)
+        else:
+            table["delta_chi2_penalised"] = (
+                table["delta_chi2_total"] - settings.component_penalty * table["n_components"]
+            )
     return table
 
 
@@ -631,3 +662,14 @@ def screen_spectrum(
             row.update(context)
         rows.append(row)
     return pd.DataFrame(rows)
+
+
+def null_offsets_from_table(table: pd.DataFrame, statistic: str = "median") -> dict[str, float]:
+    """Per-system null offsets from a table of per-object maxima.
+
+    ``table`` has one row per (object, system) with the best total statistic
+    that system reached anywhere in a blind scan; see the null calibration in
+    JOURNAL.md.  The median over objects is the offset.
+    """
+    grouped = table.groupby("system")["max_total"]
+    return {k: float(v) for k, v in getattr(grouped, statistic)().items()}

@@ -307,10 +307,11 @@ def test_unidentifiable_widths_are_excluded_from_the_scan():
         min_broad_orthogonality=0.5,
     )
     allowed = identifiable_sigmas(projected, "Halpha", Z, settings)
-    widths = [s for s, _ in allowed]
+    widths = [s for s, _, _ in allowed]
     assert 300.0 in widths and 1200.0 in widths
     assert 5000.0 not in widths and 8000.0 not in widths
-    assert all(o >= 0.5 for _, o in allowed)
+    assert all(o >= 0.5 for _, o, _ in allowed)
+    assert all(c.shape == projected.wavelength.shape for _, _, c in allowed)
 
 
 def test_orthogonality_threshold_suppresses_the_railing_failure():
