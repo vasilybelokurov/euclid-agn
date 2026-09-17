@@ -1563,3 +1563,24 @@ lines) — χ²(z) then responds only to lines and sharp continuum features;
 ``cube=None`` gives a pure line scan in the same framework (must reproduce
 the matched filter).  Running lines-only, 1-, 18-archetype and PCA-3
 variants with the spline on the Hα sample.
+
+### Spline-deprojected joint fits on the Hα sample (`outputs/continuum_variants_halpha_spline.parquet`)
+
+| model (all with 12-knot spline projected out) | data only | with prior |
+|---|---:|---:|
+| **lines only** (matched filter re-expressed in the joint framework) | 25.7 % | **39.9 %** |
+| + 1 archetype | 22.5 % | 34.4 % |
+| + 18 archetypes (NNLS) | 17.4 % | 30.3 % |
+| + PCA-3 (free sign) | 7.8 % | 12.4 % |
+| session-10 matched filter (prior) | | 37.6 % |
+
+The re-expressed line scan matches (slightly exceeds) the old matched
+filter — the joint framework is sound.  Every continuum column added at
+S/N ≈ 3 per pixel costs accuracy: deprojected templates still fit residual
+structure differently at each z.  Conversely, on the bright low-z sample the
+continuum is the only information and lines are irrelevant.  Design
+decision: the GALAXY class runs *two* models — (A) lines + spline nuisance;
+(B) archetypes × multiplicative cubic with lines, dither-scatter variance —
+and picks per object by evidence (BIC on the same pixels), with the
+continuum S/N as the expected discriminant (Hα sample median S/N 2.7; low-z
+sample 16–160).
