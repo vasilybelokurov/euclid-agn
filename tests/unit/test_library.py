@@ -133,3 +133,15 @@ def test_bridging_interpolates_isolated_defects_and_cubics_wide_gaps():
     assert np.isfinite(b.flux).all()
     assert np.allclose(b.flux[[500, 1200, 1201, 1202]], flux[[500, 1200, 1201, 1202]], rtol=1e-3)
     assert np.allclose(b.flux[gap], flux[gap], rtol=2e-2)
+
+
+def test_smoothing_cache_is_per_instance_not_per_id():
+    from euclid_agn.models.library import Template, smoothed_cumulative
+
+    w = np.exp(np.arange(np.log(9000.0), np.log(20000.0), 1e-4))
+    a = Template("a", "GALAXY", w, np.ones(w.size), np.ones(w.size, bool))
+    _, ca = smoothed_cumulative(a, 1e-3)
+    b = Template("b", "GALAXY", w, 2 * np.ones(w.size), np.ones(w.size, bool))
+    _, cb = smoothed_cumulative(b, 1e-3)
+    assert np.allclose(cb, 2 * ca)
+    assert "_smoothed_cache" in a.__dict__ and "_smoothed_cache" in b.__dict__

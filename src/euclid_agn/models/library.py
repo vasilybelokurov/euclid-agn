@@ -201,19 +201,20 @@ def load_glikman_composite(path: str | Path = DEFAULT_ROOT / "qso" / "table7.dat
 # --- projection onto a Euclid spectrum -------------------------------------------
 
 
-_SMOOTHED: dict[tuple[int, float], tuple[np.ndarray, np.ndarray]] = {}
-
-
 def smoothed_cumulative(template: Template, sigma_log: float) -> tuple[np.ndarray, np.ndarray]:
     """Rest-frame template smoothed by ``sigma_log`` (Gaussian in ln-wavelength) and its cumulative integral.
 
     The observed-frame LSF is a fixed width in ln-wavelength for a given object
     (``lsf_sigma / lambda_ref``), so this depends on the object's LSF but not on
-    the trial redshift: computed once per (template, LSF) and memoised, it makes
-    a redshift scan a sequence of interpolations.
+    the trial redshift: computed once per (template, LSF) and memoised on the
+    template instance, it makes a redshift scan a sequence of interpolations.
+    (Memoised on the instance, not in a module dict keyed on ``id()``: ids are
+    reused after garbage collection and a stale entry returned another
+    template's flux - caught by an order-dependent test failure.)
     """
-    key = (id(template), round(float(sigma_log), 7))
-    hit = _SMOOTHED.get(key)
+    cache = template.__dict__.setdefault("_smoothed_cache", {})
+    key = round(float(sigma_log), 7)
+    hit = cache.get(key)
     if hit is not None:
         return hit
     flux = template.bridged().flux if not template.mask.all() else template.flux
@@ -221,10 +222,10 @@ def smoothed_cumulative(template: Template, sigma_log: float) -> tuple[np.ndarra
     smoothed = gaussian_filter1d(flux, max(sigma_log / dlog, 0.5), mode="nearest")
     # cumulative integral in the *rest* frame; redshifting multiplies it by (1+z)
     cumulative = np.concatenate([[0.0], np.cumsum(0.5 * (smoothed[1:] + smoothed[:-1]) * np.diff(template.wavelength))])
-    if len(_SMOOTHED) > 512:
-        _SMOOTHED.clear()
-    _SMOOTHED[key] = (template.wavelength, cumulative)
-    return _SMOOTHED[key]
+    if len(cache) > 64:
+        cache.clear()
+    cache[key] = (template.wavelength, cumulative)
+    return cache[key]
 
 
 @blas_safe
