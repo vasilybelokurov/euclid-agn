@@ -2039,3 +2039,9 @@ one or two.
 5. Physical point worth remembering: at z < 0.01 a passive galaxy and a star
    are the same spectrum at R ≈ 450 — the class engine calling NGC 1527 a STAR
    is correct behaviour, not a bug.
+
+The other seven hosts were never resolved: IRSA's CAOM endpoint returned
+HTTP 502/504 for every cone between 18:30 and 19:13.  No point retrying — all
+are at 17–33 Mpc, i.e. further than NGC 1527, so they carry fewer usable
+clusters at the same contamination level.  If the test is ever revisited it
+needs a host at D ≲ 5 Mpc (none in the Q1 fields) or DR1's wider footprint.
