@@ -18,7 +18,7 @@ can be reported against them.
 | M1 Q1 archive layer | done (IRSA backend; ESA backend declared, not implemented) |
 | M2 simulator and model primitives | done — line catalogue, LSF, simulator, constrained linear solver, B-spline continuum, non-parametric NLR, BLR components, M0/M1 forward model |
 | M3 Stage-1 fitter | done — hypotheses, matched-filter scan (0.44 ms/hypothesis), full M0/M1 refinement, three degeneracy guards, pilot run on real Q1 spectra |
-| M4 EDF-N validation | started — SPE and DESI reference ingestion, blind redshift recovery, 6 defects found and fixed; on DESI galaxies with detectable Hα the redshift is recovered 60–69 % (Euclid SPE: 23 %). Injection/recovery and the empirical null still to do. |
+| M4 EDF-N validation | in progress — redshift identification validated on a DESI holdout (61–76 % where Hα is detectable; Euclid SPE 25 %); injection/recovery and empirical nulls run on 38 real hosts: 50 % completeness at ~4×10⁻¹⁶ erg s⁻¹ cm⁻² for σ = 1500 km/s at 5 % FPR. Wider samples, other windows and the Stage-1 scan null still to do. |
 | M5 joint dither fitting | not started |
 | M6 Q1 production run | not started |
 
@@ -34,8 +34,19 @@ grism — the pipeline, given no redshift, recovers DESI's within 1000 km/s for
 agrees with DESI for 23 % of the same objects. Where Hα is not detectable the
 pipeline agrees 3 % of the time, as it should. `plots/desi_redshift_recovery.png`.
 
-Getting there found six defects, each verified on real spectra and each with a
-regression test; see `JOURNAL.md` sessions 6–7.
+On a fresh holdout of 104 galaxies the numbers held: 61 % and 76 %.
+
+**First selection function:** broad Hα injected into 38 of these real spectra,
+with a null built from 483 trials on the same spectra (off-redshift, and a
+broad component forced onto forbidden [N II]): 50 % completeness at
+~4×10⁻¹⁶ erg s⁻¹ cm⁻² for σ = 1500 km/s at 5 % false-positive rate, ~9×10⁻¹⁶
+at 700 km/s (competes with the narrow profile), ~6×10⁻¹⁶ at 3000 km/s
+(competes with the continuum). Detections below 5×10⁻¹⁶ are biased high by
+2–20×. `plots/completeness_desi_halpha.png`. Faint ELG hosts only, one window,
+one field — the selection function elsewhere is not yet measured.
+
+Getting there found nine defects, each verified on real spectra and each with a
+regression test; see `JOURNAL.md` sessions 6–8.
 
 ## Q1 spectra availability (measured 2026-09-16)
 

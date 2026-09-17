@@ -1028,3 +1028,58 @@ such hosts is intrinsically several × 10⁻¹⁶, roughly √(σ_broad/σ_narro
 the narrow-line limit.
 
 Re-run with the cap, at 12 and 6 continuum knots, appended below.
+
+### Injection/recovery with the profile capped — the first selection function
+
+38 DESI galaxies at 0.9 < z < 1.8 with correctly identified Hα; broad Hα
+injected at 7 fluxes (3×10⁻¹⁷ – 10⁻¹⁵ erg s⁻¹ cm⁻²) × 3 widths; 483 null
+trials with nothing injected (on-redshift, off-redshift, broad-on-[N II]).
+Figure `plots/completeness_desi_halpha.png`.
+
+**Null.**  The three constructions agree: p99 of effective Δχ² = 2.9 / 4.1 / 3.4
+(on / off / forbidden) at 12 knots.  Thresholds read from the pooled null:
+**1.4 at 5 % FPR, 3.4 at 1 %**.  These are single-hypothesis thresholds — the
+redshift is fixed — and are *not* the Stage-1 scan thresholds, where ~1000
+hypotheses are tried per object and the null p95 was ~21.
+
+**Completeness (12 knots, FPR 5 %):**
+
+| injected flux | σ = 700 km/s | 1500 | 3000 |
+|---|---:|---:|---:|
+| 1.8×10⁻¹⁶ | 0 % | 21 % | 16 % |
+| 3.2×10⁻¹⁶ | 5 % | 37 % | 29 % |
+| 5.6×10⁻¹⁶ | 29 % | 71 % | 47 % |
+| 1.0×10⁻¹⁵ | 55 % | 89 % | 79 % |
+
+50 % completeness: **~9×10⁻¹⁶ at 700 km/s, ~4×10⁻¹⁶ at 1500, ~6×10⁻¹⁶ at
+3000**.  The width dependence is the two degeneracies made quantitative: 700
+km/s is only ~1.7× the LSF for these sources and competes with the narrow
+profile; 3000 km/s competes with the continuum (orthogonality 0.47).  1500 km/s
+is the sweet spot of this grism at 12 knots.
+
+**Flux bias.**  Unbiased (recovered/injected 0.9–1.0) above 5×10⁻¹⁶.  Below
+that, detections are strongly biased high — 2–20× at 10⁻¹⁶ and below — the
+Eddington bias of selecting upward fluctuations, now measured rather than
+assumed.  Any flux quoted for a marginal candidate must carry this.
+
+**Continuum stiffness.**  At 6 knots the null widens (p99 6–11: continuum
+mismatch appears as signal) and the 1 %-FPR completeness falls; 12 knots stays
+the default.
+
+Caveats: 38 hosts, all faint ELGs (continuum S/N ≈ 3, LSF 12–20 Å), one
+redshift window, one field.  The selection function for bright or extended
+hosts, other windows and other fields is not yet measured.  These numbers are
+for the *measurement* step at a known redshift; the end-to-end completeness
+also carries the identification efficiency (61–76 % on the holdout where Hα is
+detectable).
+
+Tests: **285 offline**.  Cache: 46 files, 33 tiles, ~1.6 GB.
+
+### Next
+
+1. Widen the injection sample: more hosts, brighter hosts, the Hβ window,
+   EDF-S/F; stratify completeness by LSF and S/N.
+2. Stage-1 scan null on the same footing (scan over hypotheses, nothing
+   injected) so the Stage-1 threshold is calibrated the same way.
+3. M5 dither-level fitting; first target 2684915737657679255.
+4. Stellar continuum for the bright low-z population.
