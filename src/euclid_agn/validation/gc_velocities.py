@@ -40,18 +40,30 @@ from euclid_agn.spectra.coherence import dither_variance_rescale
 log = logging.getLogger(__name__)
 
 
-def build_engines(wavelength, bin_width, z_max: float = 0.05):
-    """Engines tuned for the local-universe test: galaxies scanned only to z = 0.05."""
+def build_engines(wavelength, bin_width, z_max: float = 0.05, with_qso: bool = False):
+    """Engines tuned for the local-universe test: galaxies scanned only to z = z_max.
+
+    ``with_qso`` is off by default: measured on a random control field, the QSO
+    class (one composite, free redshift to 3.3 over 1,100 trial values) wins for
+    12 of 23 objects at S/N 3-10 while at S/N > 20 every object is correctly a
+    star - it is the most flexible hypothesis and the least relevant one for a
+    local-universe test.
+    """
     galaxy = load_xsl_ssp_library(log_age_min=8.5, mh_min=-0.5)[::6]
     stars = [t for t in load_phoenix_library(mh_values=(0.0, -1.0), teff_step=5) if t.metadata["logg"] in (2.0, 4.5)]
-    specs = default_specs(galaxy, [load_glikman_composite()], stars, galaxy_nonnegative=True, star_nonnegative=True,
-                          z_max_galaxy=z_max, z_max_qso=3.3)
+    specs = default_specs(galaxy, [load_glikman_composite()] if with_qso else None, stars, galaxy_nonnegative=True,
+                          star_nonnegative=True, z_max_galaxy=z_max, z_max_qso=3.3)
     classifier = RedshiftEngine(specs, wavelength, bin_width)
     store = CubeStore({"GALAXY": galaxy}, redshift_grid(0.0, z_max, 100.0), wavelength, bin_width)
     return classifier, GalaxyEngine(store)
 
 
-def run(candidates: pd.DataFrame, z_max: float = 0.05, with_rvspecfit: bool = True) -> pd.DataFrame:
+#: rvspecfit configuration with +-3000 km/s (the default +-1500 does not reach NGC 2110 at 2312 km/s)
+WIDE_CONFIG = str(Path("~/data/euclid/rvspecfit/config_wide.yaml").expanduser())
+
+
+def run(candidates: pd.DataFrame, z_max: float = 0.05, with_rvspecfit: bool = True, with_qso: bool = False,
+        rvs_config: str = WIDE_CONFIG) -> pd.DataFrame:
     from euclid_agn.external.rvspecfit_star import fit_star
 
     rows = []
@@ -63,7 +75,7 @@ def run(candidates: pd.DataFrame, z_max: float = 0.05, with_rvspecfit: bool = Tr
                 obs = f.read_observation(int(row.object_id), with_dithers=True)
                 spectrum, _ = dither_variance_rescale(obs) if obs.dithers else (obs.combined, None)
                 if classifier is None:
-                    classifier, galaxy_engine = build_engines(spectrum.wavelength, spectrum.bin_width, z_max)
+                    classifier, galaxy_engine = build_engines(spectrum.wavelength, spectrum.bin_width, z_max, with_qso)
                 projected = prepare(spectrum, ScreenSettings(n_knots=1, outlier_threshold=5.0))
                 if projected is None:
                     continue
@@ -78,7 +90,7 @@ def run(candidates: pd.DataFrame, z_max: float = 0.05, with_rvspecfit: bool = Tr
                     out["v_galaxy_kms"] = C_KMS * gal.z
                 if with_rvspecfit:
                     try:
-                        sf = fit_star(spectrum)
+                        sf = fit_star(spectrum, config_path=rvs_config)
                     except Exception as exc:  # noqa: BLE001
                         log.warning("rvspecfit failed on %s: %s", row.object_id, str(exc)[:60])
                         sf = None
@@ -113,13 +125,14 @@ def main(argv=None) -> None:
     parser.add_argument("--min-snr", type=float, default=3.0)
     parser.add_argument("--max-objects", type=int, default=400)
     parser.add_argument("--z-max", type=float, default=0.05)
+    parser.add_argument("--with-qso", action="store_true")
     parser.add_argument("--out", type=Path, default=Path("outputs/gc_velocities.parquet"))
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     c = pd.read_parquet(args.candidates)
     c = c[c.snr > args.min_snr].nlargest(args.max_objects, "snr")
     print(f"{len(c)} candidates with S/N > {args.min_snr}; S/N quantiles {c.snr.quantile([.5, .9]).round(1).tolist()}")
-    t = run(c, z_max=args.z_max)
+    t = run(c, z_max=args.z_max, with_qso=args.with_qso)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     t.to_parquet(args.out, index=False)
     print(summarise(t))
