@@ -64,7 +64,7 @@ def redshift_grid(z_min: float, z_max: float, step_kms: float) -> np.ndarray:
 
 
 def _polynomial_columns(projected, degree: int) -> np.ndarray:
-    x = (projected.wavelength - projected.wavelength.mean()) / (projected.wavelength.ptp() / 2)
+    x = (projected.wavelength - projected.wavelength.mean()) / (np.ptp(projected.wavelength) / 2)
     return np.column_stack([x**k for k in range(degree + 1)]) if degree >= 0 else np.zeros((x.size, 0))
 
 
