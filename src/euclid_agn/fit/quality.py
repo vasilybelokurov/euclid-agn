@@ -44,6 +44,8 @@ class ZWarn(IntFlag):
     PRIOR_DECIDED = 64
     CONTAMINATED = 128
     EDGE_LINE = 256
+    INCOHERENT_DITHERS = 512  # the strongest feature is not present in >= 2 dithers
+    NO_FEATURE = 1024  # no line-shaped feature anywhere, redshift-agnostic
 
 
 @dataclass(frozen=True)
@@ -61,6 +63,10 @@ class QualityThresholds:
     min_usable_fraction: float = 0.5
     max_contaminants_per_dither: float = 12.0
     edge_margin_pixels: float = 6.0
+    #: Stage-0 feature gate: strongest single-line statistic anywhere.  The
+    #: null maximum over ~450 positions for one component is ~7 + 6.6 (see
+    #: JOURNAL); 25 is well clear of it.
+    min_feature_dchi2: float = 25.0
 
 
 def zwarn_for_row(row, thresholds: QualityThresholds = QualityThresholds()) -> int:
@@ -117,6 +123,14 @@ def zwarn_for_row(row, thresholds: QualityThresholds = QualityThresholds()) -> i
     edge = float(get("winning_line_edge_pixels"))
     if np.isfinite(edge) and edge < t.edge_margin_pixels:
         warn |= ZWarn.EDGE_LINE
+
+    feature = float(get("feature_max_dchi2"))
+    if np.isfinite(feature) and feature < t.min_feature_dchi2:
+        warn |= ZWarn.NO_FEATURE
+    coherent = get("feature_coherent", None)
+    evaluable = float(get("feature_n_dithers_evaluable"))
+    if coherent is not None and np.isfinite(evaluable) and evaluable >= 1 and not bool(float(coherent)):
+        warn |= ZWarn.INCOHERENT_DITHERS
 
     return int(warn)
 

@@ -109,6 +109,17 @@ def screen_file(
             metrics = combined.quality_metrics()
             if metrics["usable_pixel_fraction"] < config.selection.min_usable_pixel_fraction:
                 continue
+            # Stage 0: is there a feature, and is it in more than one dither?
+            from euclid_agn.spectra.features import feature_report
+            from euclid_agn.spectra.types import SpectralObservation
+
+            observation = SpectralObservation(
+                source=sir.read_source_context(group),
+                combined=combined,
+                dithers=sir.read_dithers(group),
+            )
+            features = feature_report(observation, settings)
+            contamination = observation.contamination_metrics()
             audit = audit_spectrum(combined, object_id=group.object_id)
             # The measured per-object noise scale enters the likelihood here:
             # the variance is rescaled so that chi-squared means what it says,
@@ -130,6 +141,8 @@ def screen_file(
             context["noise_variance_scale"] = float(
                 fitted.metadata.get("variance_scale", 1.0)
             )
+            context.update(features.as_row())
+            context.update(contamination)
             context["noise_acf_lag1"] = (
                 audit.autocorrelation.get(1, float("nan")) if audit is not None else float("nan")
             )
