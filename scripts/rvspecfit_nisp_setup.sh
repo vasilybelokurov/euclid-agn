@@ -32,11 +32,11 @@ fits.PrimaryHDU(lam.astype(np.float64)).writeto(phx / "WAVE_PHOENIX_R10000.fits"
 print("wavefile", lam[0], lam[-1], lam.size)
 PY
 rm -f "$OUT/files.db"; rvs_read_grid --prefix "$PHX/" --glob_mask "Z*/lte*.fits" --templdb "$OUT/files.db"  # rvspecfit concatenates prefix+mask: trailing slash required
-rvs_make_interpol --setup nisp_red --lambda0 11800 --lambda1 19100 --resol_func "x/32.3" --step 6.7 \
+rvs_make_interpol --setup nisp_red --lambda0 11500 --lambda1 19500 --resol_func "x/32.3" --step 6.7 \
   --templdb "$OUT/files.db" --templprefix "$PHX" --wavefile "$PHX/WAVE_PHOENIX_R10000.fits" \
   --oprefix "$OUT/templ_data" --nthreads 8
 rvs_make_nd --prefix "$OUT/templ_data" --setup nisp_red
 rvs_make_ccf --prefix "$OUT/templ_data" --oprefix "$OUT/templ_data" --setup nisp_red \
-  --lambda0 11800 --lambda1 19100 --step 6.7 --every 4 --nthreads 8
+  --lambda0 11500 --lambda1 19500 --step 6.7 --every 4 --nthreads 8
 echo "rvspecfit nisp_red configuration built in $OUT/templ_data"
 ls -la "$OUT/templ_data" | head

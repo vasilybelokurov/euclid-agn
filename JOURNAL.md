@@ -1947,3 +1947,46 @@ field with it enabled, 12 of 23 objects at S/N 3–10 were called QSO (one
 composite, free z to 3.3 over 1,100 trials is the most flexible hypothesis),
 while at S/N > 20 all were correctly STAR.  With GALAXY (z ≤ 0.05) and STAR
 only, the control gives STAR for 75–100 %.
+
+### NGC 1527: data route, and first velocities
+
+IRSA's TAP went down mid-session (HTTP 502 on the association table after 8
+retries over 11 min; MER unusable all session).  Replaced by a **TAP-free
+route**: list ``s3://nasa-irsa-euclid-q1/q1/SIR/<tile>/`` (1 s, ~112 files per
+tile), open each file *remotely* (11 s, headers + META only) to get its
+objects' positions, and select by separation.  Tile 102021498 contains
+NGC 1527 (4.3′ from its centre); 87 of its files lie within 15′ of the host;
+45 files yield **4,369 unique objects within 10′** (2,447 at S/N > 3, 834 at
+> 10, 290 at > 30), extracted in 82 s with ten threads.  No download needed.
+
+**The host itself** (S/N 1246, 0.4″ from the LEDA position, LSF σ = 91 Å
+because it is hugely extended): our GALAXY engine gives z = 0.00535, i.e.
+1604 km/s against the true 1176 — a 428 km/s error, which is 0.1 of the
+resolution element (FWHM 4100 km/s) for this object.  The class engine calls
+it STAR with a huge margin, and that is *correct physics*: at z < 0.01 a
+passive galaxy and a star are the same spectrum at R ≈ 450, differing only by
+a 0.4-pixel shift and by internal broadening far below the LSF.  The
+GC/UCD test is therefore a velocity test, not a classification test.
+
+**First measurement** (146 point-like, LSF σ < 16 Å, S/N > 30 sources within
+10′; formal-error cut < 200 km/s):
+
+| | NGC 1527 field | random control |
+|---|---:|---:|
+| good fits | 26 | 46 |
+| \|v\| < 300 km/s | 58 % | 87 % |
+| **900–1600 km/s** | **1 (3.8 %)** | 0 (0 %) |
+| railed at ±3000 | 35 % | 7 % |
+
+No significant excess yet.  The best candidate is object −620942435478631852
+at 2.0′ from the centre, S/N 30: **v = 1137 ± 119 km/s against the host's
+1176** — but its fitted Teff rails at the grid edge, so it is not yet
+trustworthy.  The five-fold excess of railed fits over the control is
+contamination: slitless spectra within a few arcmin of a bright galaxy carry
+its light and its neighbours'.
+
+**Bug found and fixed:** 101 of the 146 fits were refused with "template
+library doesn't cover this wavelength range" — with the ±3000 km/s search the
+spectrum shifted by 1 % runs past the template edge at 19163 Å.  Templates
+rebuilt over 11500–19500 Å.  (The earlier stellar-RV results used ±1500 km/s
+and were unaffected.)
