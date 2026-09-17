@@ -1431,3 +1431,33 @@ Running on the 489 low-z galaxies now.
 Adopted configuration for the GALAXY class: 18 XSL archetypes (log t ≥ 8.5,
 [M/H] ≥ −0.5), NNLS, cubic additive nuisance, coherence mask, PHZ prior
 reported alongside the data-only answer.
+
+### rvspecfit (Koposov) — assessment for the STAR class and for method
+
+rvspecfit — https://github.com/segasai/rvspecfit, ASCL 1907.013
+(https://ascl.net/1907.013), method in Koposov et al. 2011, ApJ 736, 146;
+the DESI Milky Way Survey RV pipeline (Cooper et al. 2023, ApJ 947, 37,
+https://doi.org/10.3847/1538-4357/acb3c0) — fits spectra with *interpolated
+synthetic PHOENIX templates* (Husser et al. 2013, A&A 553, A6,
+https://doi.org/10.1051/0004-6361/201219058) over Teff, log g, [Fe/H],
+[α/Fe], RV.  Pipeline (README, verified): PHOENIX grid → SQLite
+(`rvs_read_grid`) → per-instrument templates convolved to the instrument
+resolution (`rvs_make_interpol`) → n-D interpolator (`rvs_make_nd`, Delaunay
+/ multilinear / NN) → CCF templates (`rvs_make_ccf`); fit = CCF initial
+guess, then maximum-likelihood optimisation with a *multiplicative*
+polynomial continuum (order 10 default); multi-arm simultaneous fitting.
+
+Relevance here:
+1. STAR class: PHOENIX has no telluric gaps (unlike XSL) and stars are point
+   sources, so rvspecfit's fixed per-configuration LSF is exactly right for
+   them; gives Teff/log g/[Fe/H] plus a stellar χ² to set against our
+   GALAXY/QSO χ² — DESI's star/non-star recipe.
+2. Method transferred to all classes: multiplicative continuum polynomial
+   (implemented in `cube_scan(multiplicative_degree=...)`, bilinear solved by
+   alternation; sweep 4 running), CCF-then-refine (we have grid + parabolic
+   refinement), interpolation in physical parameters (our NNLS mixture of
+   archetypes plays this role for galaxies).
+3. Not applicable to galaxies/QSOs directly.
+Cost: PHOENIX v2.0 grid download (restricted Teff/log g/[Fe/H] range) and a
+one-off NISP configuration build (R ≈ 465, 11 900–19 000 Å).  Awaiting the
+go-ahead for the download.
