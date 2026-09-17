@@ -218,7 +218,7 @@ def run_variants(
 def summarise(table: pd.DataFrame, cuts=(0, 10, 25, 50, 100)) -> pd.DataFrame:
     """Agreement per variant overall, by redshift bin, and purity at Delta chi2 cuts."""
     out = []
-    z_bins = [(0.0, 0.15), (0.15, 0.3), (0.3, 0.45), (0.45, 0.9)]
+    z_bins = [(0.0, 0.15), (0.15, 0.3), (0.3, 0.45), (0.45, 0.9), (0.9, 1.2), (1.2, 1.5), (1.5, 2.0)]
     for name, g in table.groupby("variant", sort=False):
         row = {"variant": name, "n": len(g), "agree": g["agree"].mean(), "agree_001": g["agree_001"].mean(),
                "agree_prior": g["agree_prior"].mean(), "chi2_red_median": g["chi2_red"].median()}
@@ -271,12 +271,17 @@ def main(argv=None) -> None:
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--variants", nargs="*", default=None, help="names from DEFAULT_VARIANTS")
     parser.add_argument("--out", type=Path, default=Path("outputs/continuum_variants.parquet"))
+    parser.add_argument("--z-max", type=float, default=None, help="override the variants' redshift range")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     sample = load_sample(args.sample)
     if args.limit:
         sample = sample.iloc[: args.limit]
     variants = DEFAULT_VARIANTS if not args.variants else [v for v in DEFAULT_VARIANTS if v.name in args.variants]
+    if args.z_max is not None:
+        from dataclasses import replace
+
+        variants = [replace(v, z_max=args.z_max) for v in variants]
     table = run_variants(sample, variants, cache=args.cache)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     table.to_parquet(args.out, index=False)

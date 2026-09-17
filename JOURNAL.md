@@ -1461,3 +1461,19 @@ Relevance here:
 Cost: PHOENIX v2.0 grid download (restricted Teff/log g/[Fe/H] range) and a
 one-off NISP configuration build (R ≈ 465, 11 900–19 000 Å).  Awaiting the
 go-ahead for the download.
+
+### Joint scan on the low-z sample (`outputs/continuum_variants_joint.parquet`)
+
+| variant | |Δz|/(1+z) < 0.01 | within 1000 km/s |
+|---|---:|---:|
+| archetypes + cubic (continuum only) | 43.8 % | 39.1 % |
+| + line templates (joint) | 43.8 % | 36.6 % |
+| + line templates + coherence mask | 43.1 % | 36.4 % |
+
+A wash on this sample: the joint fit fixes 25 objects and breaks 25.  Where
+the lines carry evidence (Δχ²_lines > 100, n = 99) joint is 24 % vs 19 %; at
+the strict 1000 km/s the non-negative line columns lock onto noise at
+slightly shifted z and cost 2.5 points.  Expected: bright z < 0.3 galaxies are
+line-poor in the red grism (best line template is Pa-β/[S III] or He I/Pa-γ,
+never the Hα complex).  The decisive test is the 218-object Hα-window sample
+(z 0.9–1.8; line-only scan: 35.8 % on all 218) — running with z ≤ 2.
