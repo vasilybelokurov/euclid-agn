@@ -47,6 +47,7 @@ class ZWarn(IntFlag):
     INCOHERENT_DITHERS = 512  # the strongest feature is not present in >= 2 dithers
     NO_FEATURE = 1024  # no line-shaped feature anywhere, redshift-agnostic
     AMBIGUOUS_CLASS = 2048  # best class beats the runner-up class by less than the threshold
+    MODELS_DISAGREE = 4096  # lines+spline and continuum+lines models give different redshifts
 
 
 @dataclass(frozen=True)
