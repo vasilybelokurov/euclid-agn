@@ -1826,3 +1826,50 @@ BP−RP 0.5–1 / 1–1.5 / 1.5–2 / 2–2.5 / 2.5–3 (fit G − H = −2.11 +
 DR1 scaling (assumptions stated in the reply of 2026-09-17): 68,300 spectra
 deg⁻² in Q1 × ~1,900 deg² → ~1.3 × 10⁸ spectra, ~13.5 TB of SIR files,
 ~300 CPU-days for the 3-class engine at 0.2 s per object.
+
+### Q1 census and predicted yield beyond SPE (`validation/q1_snr_distribution.py`, `outputs/q1_snr_hist.parquet`, `outputs/success_vs_snr.parquet`)
+
+SPE's `spe_cont_snr` (rank 0) exists for 3,226,128 of the 4,307,177 Q1
+spectra (1,081,049 have no SPE solution at all).  On 685 DESI objects it is
+19.3× our median S/N per pixel (16–84 %: 15.1–21.1) — an integrated S/N —
+so per-pixel S/N = spe_cont_snr / 19.3.  IRSA's Oracle backend has neither
+LOG10 nor alias GROUP BY; the histogram is `FLOOR(spe_cont_snr/19.3)` in 20
+`cntr` chunks, joined to `spe_class`.
+
+| per-pixel S/N | galaxy | qso | star | fraction |
+|---|---:|---:|---:|---:|
+| < 1 | 494,399 | 16,574 | 26,878 | 16.7 % |
+| 1–2 | 491,720 | 43,677 | 52,810 | 18.2 % |
+| 2–3 | 367,245 | 51,680 | 47,860 | 14.5 % |
+| 3–5 | 433,342 | 73,272 | 68,021 | 17.8 % |
+| 5–10 | 384,823 | 60,647 | 88,154 | 16.5 % |
+| 10–20 | 181,147 | 20,008 | 66,704 | 8.3 % |
+| 20–50 | 91,764 | 6,251 | 56,102 | 4.8 % |
+| > 50 | 46,255 | 902 | 55,893 | 3.2 % |
+
+Success vs S/N (DESI truth, |Δz|/(1+z) < 0.01, engine with prior vs SPE):
+bright galaxies S/N 10–20 / 20–50 / > 50: ours 14 / 38 / 70 %, SPE 8 / 18 /
+27 %, ours-right-SPE-wrong 12 / 28 / 47 %.  ELGs S/N 1–2 / 2–3 / 3–5 / 5–10 /
+10–20: ours 52 / 58 / 41 / 32 / 60 %, SPE 21 / 12 / 18 / 15 / 7 %,
+ours-not-SPE 39 / 50 / 23 / 24 / 53 %.
+
+**Predicted Q1 yield of redshifts we get right where SPE does not**
+(rates × population; the bright-galaxy rates applied to galaxy-class spectra
+with S/N ≥ 10, where the DESI sample is representative):
+
+| S/N | galaxy-class spectra | gain |
+|---|---:|---:|
+| 10–20 | 181,147 | 22,200 |
+| 20–50 | 91,764 | 25,300 |
+| > 50 | 46,255 | 21,500 |
+| **total, S/N ≥ 10** | 319,166 | **~69,000** (SPE right on ~50,000; both on ~30,000) |
+
+Faint regime: the ELG rates hold only for galaxies that *have* lines; using
+Euclid's design density of ~2,500 Hα detections deg⁻² (157,750 in 63.1 deg²)
+with the S/N-weighted ours-not-SPE rate of 0.34 gives **~54,000** more —
+an estimate resting on the design number, not a measured population.
+
+Stars: SPE publishes no velocities; star-class spectra with S/N ≥ 20
+(σ_v ≲ 100 km/s): **112,000**; S/N ≥ 10: 179,000; all: 462,000.
+Not counted: the 1.08 M spectra without any SPE solution, and the S/N 5–10
+galaxies (385,000) where neither pipeline is validated.
