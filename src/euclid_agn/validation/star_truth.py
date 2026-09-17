@@ -33,8 +33,8 @@ def cached_tiles(index_path: Path = Path("outputs/cache_object_index.parquet")) 
     return pd.read_parquet(index_path)
 
 
-def query_point_sources(tap: TapService, tiles, min_point_like: float = 0.9, chunk: int = 4) -> pd.DataFrame:
-    """MER point-like Gaia-matched sources; 4 tiles per query (20 timed out on IRSA)."""
+def query_point_sources(tap: TapService, tiles, min_point_like: float = 0.9, chunk: int = 1) -> pd.DataFrame:
+    """MER point-like Gaia-matched sources, one tile per query (multi-tile IN lists time out on IRSA)."""
     cols = ["object_id", "tileid", "point_like_prob", "point_like_flag", "gaia_id", "gaia_match_quality",
             "flux_h_2fwhm_aper", "mag_stargal_sep", "spurious_prob"]
     frames = []

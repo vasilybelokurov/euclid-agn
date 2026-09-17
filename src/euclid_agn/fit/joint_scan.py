@@ -84,8 +84,14 @@ def joint_scan(
     z_prior: float | None = None,
     prior_sigma: float = 0.05,
     prior_outlier_fraction: float = 0.13,
+    multiplicative_degree: int = 0,
+    multiplicative_iterations: int = 2,
 ) -> JointScanResult | None:
     """Chi-squared of continuum templates + line templates + polynomial at every redshift.
+
+    ``multiplicative_degree`` > 0 multiplies the *continuum* mixture by
+    ``1 + sum p_k L_k`` (lines are not multiplied: their fluxes are what we
+    measure), solved by alternation as in :func:`cube_scan`.
 
     ``nonnegative`` applies to the continuum coefficients; line amplitudes are
     always >= 0 and the polynomial is always free.  With ``nonnegative=False``
@@ -106,6 +112,7 @@ def joint_scan(
     columns_at = [None] * grid.size
     edge = edge_margin_pixels * float(projected.bin_width)
     n_c = cube.n_templates
+    mult = polynomial_columns(projected.wavelength, multiplicative_degree, reference=spectrum.wavelength)[:, 1:] if multiplicative_degree > 0 else None
     for i in np.flatnonzero(covered):
         z = float(grid[i])
         cont = cube.columns[i][keep] * weight[:, None]
@@ -129,6 +136,18 @@ def joint_scan(
             scale = np.concatenate([scale[len(line_cols) : len(line_cols) + n_c], scale[: len(line_cols)], scale[len(line_cols) + n_c :]])
         else:
             coef, c2 = _solve(design, data_w, 0, n_nonneg)
+            if mult is not None and mult.shape[1]:
+                # alternate: multiplicative correction of the continuum part, then refit
+                base = design
+                for _ in range(multiplicative_iterations):
+                    mixture = base[:, :n_c] @ coef[:n_c]
+                    if not np.any(mixture):
+                        break
+                    resid = data_w - design @ coef
+                    pc, *_ = np.linalg.lstsq(mixture[:, None] * mult, resid, rcond=None)
+                    factor = 1.0 + mult @ pc
+                    design = np.concatenate([base[:, :n_c] * factor[:, None], base[:, n_c:]], axis=1)
+                    coef, c2 = _solve(design, data_w, 0, n_nonneg)
         chi2[i] = c2
         coefficients[i] = coef / scale
         columns_at[i] = (names, line_cols)

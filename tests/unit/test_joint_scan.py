@@ -71,3 +71,17 @@ def test_free_continuum_mode_runs(cube):
     res = joint_scan(spectrum, projected, cube, poly_degree=1, nonnegative=False)
     assert abs(res.z - 0.1) < 0.004
     assert len(line_templates()) == 5
+
+
+def test_joint_multiplicative_mode_recovers_redshift(cube):
+    z = 0.1
+    spectrum = observe(z, snr=30.0)
+    w = spectrum.wavelength
+    x = (w - w.mean()) / (np.ptp(w) / 2)
+    tilted = Spectrum1D(wavelength=w, flux=spectrum.flux * (1 + 0.25 * x), variance=spectrum.variance,
+                        mask=spectrum.mask, quality=spectrum.quality, lsf_sigma=14.0, bin_width=13.4)
+    projected = prepare(tilted, ScreenSettings(n_knots=1, outlier_threshold=0.0))
+    plain = joint_scan(tilted, projected, cube, poly_degree=0)
+    mult = joint_scan(tilted, projected, cube, poly_degree=0, multiplicative_degree=2)
+    assert abs(mult.z - z) < 0.004
+    assert mult.chi2 < plain.chi2

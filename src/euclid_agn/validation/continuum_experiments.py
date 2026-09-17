@@ -109,6 +109,8 @@ def load_sample(path: Path = DEFAULT_SAMPLE) -> pd.DataFrame:
     t = t.drop_duplicates("object_id")
     cols = ["object_id", "tile_id", "desi_z", "desi_spectype", "spe_gal_z", "spe_class", "phz_median",
             "median_snr_per_pixel", "lsf_sigma"]
+    if "phz_median" not in t.columns and "phz_mode_1" in t.columns:
+        t = t.assign(phz_median=t["phz_mode_1"])  # the H-alpha sample file carries the PHZ mode only
     return t[[c for c in cols if c in t.columns]].reset_index(drop=True)
 
 
@@ -190,7 +192,7 @@ def run_variants(
                 continue
             if v.joint:
                 res = joint_scan(source, this, cube, poly_degree=v.poly_degree, nonnegative=v.nonnegative,
-                                 z_prior=float(row.get("phz_median", np.nan)))
+                                 z_prior=float(row.get("phz_median", np.nan)), multiplicative_degree=v.multiplicative_degree)
             else:
                 res = cube_scan(source, this, cube, poly_degree=v.poly_degree, nonnegative=v.nonnegative,
                                 z_prior=float(row.get("phz_median", np.nan)), spline_nuisance=v.nuisance == "spline",
@@ -266,6 +268,7 @@ DEFAULT_VARIANTS = [
     Variant("pca3_p1_joint", n_components=3, poly_degree=1, joint=True),
     Variant("arch6_nnls_p1_joint", basis="archetypes", nonnegative=True, archetype_step=18, poly_degree=1, joint=True),
     Variant("arch3_nnls_p1_joint", basis="archetypes", nonnegative=True, archetype_step=36, poly_degree=1, joint=True),
+    Variant("arch_nnls_m3_rescale_joint", basis="archetypes", nonnegative=True, archetype_step=6, poly_degree=0, multiplicative_degree=3, variance_rescale=True, joint=True),
 ]
 
 
