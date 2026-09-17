@@ -40,8 +40,10 @@ On a fresh holdout of 104 galaxies the numbers held: 61 % and 76 %.
 line on one grism orientation — present at 9–29 σ in one dither, absent in the
 others. A redshift-agnostic gate (strongest line-shaped feature at Δχ² > 25 and
 > 3 σ in ≥ 2 dithers) raises agreement on the passing sample to 64 % and makes
-the Redrock-style confidence margin monotonic (76 % purity above 15). It passes
-35 % of these faint ELGs; that cost is part of the selection function.
+the Redrock-style confidence margin monotonic (76 % purity above 15). Its
+trade-off was measured (`plots/gate_tradeoff.png`): the default, 2.5 σ in ≥ 3
+dithers, gives 72 % purity at 54 % completeness on objects with a detectable
+Hα, and requiring three dithers beats two at every completeness.
 
 **First selection function:** broad Hα injected into 38 of these real spectra,
 with a null built from 483 trials on the same spectra (off-redshift, and a

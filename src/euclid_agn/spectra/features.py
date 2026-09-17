@@ -38,12 +38,21 @@ class FeatureReport:
     n_dithers_detected: int
     dither_excess_sigma: tuple[float, ...]
 
+    min_dithers: int = 3
+
     @property
     def coherent(self) -> bool:
-        """Detected in at least two dithers, or in all when fewer are evaluable."""
+        """Detected in at least ``min_dithers`` dithers, capped at what is evaluable.
+
+        The default of three, at 2.5 sigma per dither, is the knee of the
+        purity-completeness front measured against DESI on 218 galaxies
+        (`plots/gate_tradeoff.png`): 72 per cent purity among passers at 54 per
+        cent completeness on objects with a detectable H-alpha.  Requiring
+        three dithers dominates requiring two at every completeness.
+        """
         if self.n_dithers_evaluable == 0:
             return False
-        need = min(2, self.n_dithers_evaluable)
+        need = min(self.min_dithers, self.n_dithers_evaluable)
         return self.n_dithers_detected >= need
 
     def as_row(self) -> dict[str, float]:
@@ -94,12 +103,15 @@ def dither_excess(dither, wavelength: float, core_pixels: int = 2, window_pixels
 def feature_report(
     observation,
     settings: ScreenSettings = ScreenSettings(),
-    detection_sigma: float = 3.0,
+    detection_sigma: float | None = None,
+    min_dithers: int | None = None,
 ) -> FeatureReport:
     """Strongest feature of the combined spectrum and its presence per dither."""
+    detection_sigma = settings.dither_sigma if detection_sigma is None else detection_sigma
+    min_dithers = settings.min_coherent_dithers if min_dithers is None else min_dithers
     projected = prepare(observation.combined, settings)
     if projected is None:
-        return FeatureReport(0.0, float("nan"), 0, 0, ())
+        return FeatureReport(0.0, float("nan"), 0, 0, (), min_dithers)
     stat, wavelength = strongest_line_feature(projected)
     excesses = []
     if np.isfinite(wavelength):
@@ -113,4 +125,5 @@ def feature_report(
         n_dithers_evaluable=len(evaluable),
         n_dithers_detected=detected,
         dither_excess_sigma=tuple(float(e) if e is not None else float("nan") for e in excesses),
+        min_dithers=min_dithers,
     )

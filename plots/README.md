@@ -16,6 +16,7 @@ python -m euclid_agn plot \
 | `screen_statistics.png` | where the detection statistic sits in the population, the M0 goodness of fit against the independently measured noise inflation, the statistic against continuum orthogonality, and the recovered widths. |
 | `availability_sample.png` | the Q1 parent sample: usable pixel fraction, continuum S/N, effective LSF and dither count over 1214 real spectra. |
 | `completeness_desi_halpha.png` | broad-Hα injection/recovery into 38 real DESI hosts: the empirical null, completeness against injected flux and width at 5 % and 1 % FPR, and the flux bias of detections. |
+| `gate_tradeoff.png` | purity–completeness front of the Stage-0 signal gate over feature threshold, per-dither σ and number of dithers, against DESI. |
 | `confident_wrong_desi.png`, `confident_wrong_dithers.png` | the confident-but-wrong DESI identifications: strong features at no catalogue line, shown per dither to be present in one orientation only — slitless contamination. |
 | `desi_redshift_recovery.png` | pipeline redshift against DESI for 114 Hα-window galaxies, with agreement against the detectability of Hα at the DESI redshift. |
 | `high_statistic_objects.png` | the six spectra with the largest identification statistics before outlier rejection — all driven by unmasked pixel spikes. |

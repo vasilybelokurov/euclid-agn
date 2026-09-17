@@ -168,6 +168,12 @@ class ScreenSettings:
     phz_prior_sigma: float | None = 0.05
     phz_outlier_fraction: float = 0.13
     phz_prior_range: float = 5.0
+    #: Stage-0 dither-coherence gate (see :mod:`euclid_agn.spectra.features`):
+    #: the strongest feature must exceed ``dither_sigma`` in at least
+    #: ``min_coherent_dithers`` dithers.  Defaults are the knee of the measured
+    #: purity-completeness front against DESI.
+    dither_sigma: float = 2.5
+    min_coherent_dithers: int = 3
     #: Lines (template or broad) whose centre lies within this many pixels of
     #: either end of the covered range are not tested: the outermost pixels of
     #: the science window carry edge artefacts that a line placed on them fits

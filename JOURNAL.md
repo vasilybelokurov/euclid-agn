@@ -1144,3 +1144,44 @@ cost, recorded, not a bias by host property.  The threshold is a knob to be
 set by the selection function, not by taste.
 
 Tests: **306 offline**.
+
+---
+
+## 2026-09-17 — session 10: the signal gate's trade-off, measured
+
+Per-dither excesses stored once for the 218 DESI comparison objects
+(`outputs/desi_dither_excess.parquet`), then every gate setting swept
+(`validation/gates.py`; figure `plots/gate_tradeoff.png`; table
+`outputs/gate_tradeoff.parquet`).  Completeness is measured on the 118 objects
+whose Hα DESI-redshift is detectable at Δχ² > 25 — the gate's cost on objects
+that genuinely have signal; purity is agreement with DESI among passers.
+
+| feature > 25, per-dither σ | ≥ 1 dither | ≥ 2 dithers | ≥ 3 dithers |
+|---|---|---|---|
+| 1.0 | 39 % / 98 % | 42 % / 94 % | 50 % / 84 % |
+| 2.0 | 41 % / 97 % | 54 % / 80 % | 64 % / 62 % |
+| **2.5** | 43 % / 91 % | 61 % / 73 % | **72 % / 54 %** |
+| 3.0 | 45 % / 83 % | 64 % / 56 % | 77 % / 38 % |
+| 4.0 | 47 % / 69 % | 72 % / 36 % | 78 % / 22 % |
+
+(purity / completeness.)  Two facts from the front:
+
+- **Requiring three dithers dominates requiring two** at every completeness:
+  a neighbour's line on one orientation survives a two-dither test whenever a
+  second dither has a noise bump.
+- **Tightening removes wrong identifications far faster than right ones**:
+  across the sweep, wrong passers fall 97 → 13 while correct passers fall
+  70 → 33.  That is what a gate against contamination should look like.
+
+Default set at the knee: **feature > 25, 2.5σ in ≥ 3 dithers** — 72 % purity,
+54 % completeness on Hα-detectable objects, 63 % of correct identifications
+kept.  Both numbers are recorded on every row (`feature_*` columns and the
+`INCOHERENT_DITHERS` bit); the gate is a quality flag, not a deletion, so any
+downstream analysis can move along the front.
+
+Cost to carry into the selection function: for faint ELGs (continuum S/N ≈ 3),
+half of the objects with a real Hα fail the gate because individual dithers are
+~2× noisier than the co-add.  The proper cure is the dither-level *fit* (M5),
+which uses all the flux rather than a per-dither peak test.
+
+Tests: **311 offline**.
