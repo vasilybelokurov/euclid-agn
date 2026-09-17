@@ -261,6 +261,11 @@ DEFAULT_VARIANTS = [
     Variant("arch_nnls_m3", basis="archetypes", nonnegative=True, archetype_step=6, poly_degree=0, multiplicative_degree=3),
     Variant("arch_nnls_p1m3", basis="archetypes", nonnegative=True, archetype_step=6, poly_degree=1, multiplicative_degree=3),
     Variant("arch_nnls_m3_rescale", basis="archetypes", nonnegative=True, archetype_step=6, poly_degree=0, multiplicative_degree=3, variance_rescale=True),
+    # low-dimensional continua for the joint fit of faint emission-line galaxies
+    Variant("pca2_p1_joint", n_components=2, poly_degree=1, joint=True),
+    Variant("pca3_p1_joint", n_components=3, poly_degree=1, joint=True),
+    Variant("arch6_nnls_p1_joint", basis="archetypes", nonnegative=True, archetype_step=18, poly_degree=1, joint=True),
+    Variant("arch3_nnls_p1_joint", basis="archetypes", nonnegative=True, archetype_step=36, poly_degree=1, joint=True),
 ]
 
 

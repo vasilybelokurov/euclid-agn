@@ -1477,3 +1477,24 @@ slightly shifted z and cost 2.5 points.  Expected: bright z < 0.3 galaxies are
 line-poor in the red grism (best line template is Pa-β/[S III] or He I/Pa-γ,
 never the Hα complex).  The decisive test is the 218-object Hα-window sample
 (z 0.9–1.8; line-only scan: 35.8 % on all 218) — running with z ≤ 2.
+
+### Joint scan on the Hα-window sample (218 DESI galaxies, z 0.9–1.8; `outputs/continuum_variants_halpha.parquet`)
+
+| method | |Δz|/(1+z) < 0.01 |
+|---|---:|
+| emission-line matched-filter scan (session 10, same 218) | 35.8 % |
+| continuum only, 18 archetypes + cubic | 1.8 % |
+| joint continuum + lines | 12.4 % |
+| joint + coherence mask | 12.8 % |
+
+The joint model is *worse* than lines alone at z ≈ 1: with ~26 free
+parameters over 1100 trial redshifts the continuum part produces spurious
+Δχ² across z comparable to the Hα evidence of a faint ELG (S/N 2–5 per
+pixel), and the fixed 200 km/s width and single template per system are
+weaker than the matched filter's width grid and per-system identification.
+Redrock works at this depth because its GALAXY continuum has few
+components.  Consequence for the design: continuum complexity must scale
+with S/N — rich archetype mixtures for bright continua, 2–3 components for
+faint ones — or the continuum and line scans stay separate hypotheses
+combined by evidence.  Testing 2-, 3- and 6-component joint fits on the same
+sample.
