@@ -76,11 +76,20 @@ def host_tiles(hosts=None, cache=Path("outputs/gc_host_tiles.parquet"), radius_d
     return pd.concat(frames, ignore_index=True)
 
 
-def sir_files_for_tiles(tiles, backend=None) -> pd.DataFrame:
-    """SIR file paths for the given tiles (association table; the tested query path)."""
+def default_backend(retries: int = 8, timeout: float = 900.0):
+    """Backend with generous retries: IRSA returns intermittent HTTP 502 under load."""
+    from euclid_agn.config import Config
     from euclid_agn.pipeline.ingest import make_backend
 
-    backend = backend or make_backend()
+    backend = make_backend(Config())
+    backend.tap.retries = retries
+    backend.tap.timeout = timeout
+    return backend
+
+
+def sir_files_for_tiles(tiles, backend=None) -> pd.DataFrame:
+    """SIR file paths for the given tiles (association table; the tested query path)."""
+    backend = backend or default_backend()
     frames = []
     for tile in sorted({int(t) for t in tiles}):
         try:
@@ -91,6 +100,72 @@ def sir_files_for_tiles(tiles, backend=None) -> pd.DataFrame:
         if len(a):
             frames.append(a.assign(tileid=tile))
     return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+
+
+#: candidate tiles per host, from the CAOM cone (cached in outputs/gc_host_tiles.parquet).
+#: NGC 1527's were resolved before IRSA's TAP service started returning HTTP 502.
+KNOWN_TILES: dict[str, tuple[int, ...]] = {
+    "NGC1527": (102021497, 102021498, 102021499, 102021500, 102021985, 102021986, 102021987, 102021988,
+                102022478, 102022479),
+}
+
+
+def s3_files_for_tile(filesystem, tile: int) -> list[str]:
+    """Every SIR combined-spectra file of a tile, straight from the public bucket.
+
+    The association table is the documented route, but it returns HTTP 502
+    under load; the bucket layout ``q1/SIR/<tile>/`` is stable and costs one
+    listing call.
+    """
+    return sorted(filesystem.ls(f"nasa-irsa-euclid-q1/q1/SIR/{tile}"))
+
+
+def file_positions(filesystem, keys, workers: int = 8, sample: int = 25) -> pd.DataFrame:
+    """Median sky position and object count of each SIR file, read remotely.
+
+    Only headers and the META tables are transferred (~11 s per file, so the
+    scan is threaded).  This is what replaces a positional catalogue query.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    from euclid_agn.io.sir import open_sir_file
+
+    def one(key: str) -> dict:
+        try:
+            with open_sir_file(key, filesystem=filesystem) as h:
+                ids = h.object_ids()
+                step = max(len(ids) // sample, 1)
+                coords = [(c.ra, c.dec) for c in (h.read_source_context(h.group_for_object(o)) for o in ids[::step][:sample])]
+            ra = float(np.median([c[0] for c in coords])); dec = float(np.median([c[1] for c in coords]))
+            return {"key": key, "ra": ra, "dec": dec, "n_objects": len(ids)}
+        except Exception as exc:  # noqa: BLE001
+            log.warning("%s: %s", key.split("/")[-1], str(exc)[:80])
+            return {"key": key, "ra": np.nan, "dec": np.nan, "n_objects": 0}
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        return pd.DataFrame(list(pool.map(one, keys)))
+
+
+def objects_near_remote(filesystem, key: str, ra: float, dec: float, radius_arcmin: float) -> pd.DataFrame:
+    """Objects within a radius in one remote SIR file, with S/N measured from the spectra."""
+    from euclid_agn.io.sir import open_sir_file
+
+    cosd = np.cos(np.deg2rad(dec))
+    rows = []
+    with open_sir_file(key, filesystem=filesystem) as f:
+        for oid in f.object_ids():
+            group = f.group_for_object(oid)
+            ctx = f.read_source_context(group)
+            sep = 60.0 * np.hypot((ctx.ra - ra) * cosd, ctx.dec - dec)
+            if sep > radius_arcmin:
+                continue
+            spectrum = f.read_combined(group)
+            ok = spectrum.usable()
+            snr = float(np.nanmedian(spectrum.flux[ok] / np.sqrt(spectrum.variance[ok]))) if ok.any() else np.nan
+            rows.append({"object_id": int(oid), "ra": float(ctx.ra), "dec": float(ctx.dec), "sep_arcmin": float(sep),
+                         "snr": snr, "usable_fraction": float(ok.mean()), "lsf_sigma": float(spectrum.lsf_sigma),
+                         "file": key})
+    return pd.DataFrame(rows)
 
 
 def objects_near(sir_path, ra: float, dec: float, radius_arcmin: float) -> pd.DataFrame:
@@ -131,9 +206,8 @@ def main(argv=None) -> None:
     if args.tiles_only:
         return
     from euclid_agn.io.cache import ArchiveCache
-    from euclid_agn.pipeline.ingest import make_backend
 
-    backend = make_backend()
+    backend = default_backend()
     cache = ArchiveCache(Path("~/data/euclid").expanduser())
     frames = []
     for name, field, ra, dec, d, typ, v in hosts:

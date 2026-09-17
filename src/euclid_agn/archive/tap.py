@@ -61,7 +61,8 @@ class TapService:
                 last_exc = exc
                 if attempt == self.retries:
                     raise TapError(f"TAP request failed: {exc}\nQuery was:\n{adql}") from exc
-                time.sleep(2.0 * (attempt + 1))
+                # exponential backoff capped at a minute: IRSA returns HTTP 502 in bursts
+                time.sleep(min(2.0 * 2 ** attempt, 60.0))
         if text.lstrip().startswith("<"):
             raise TapError(f"TAP returned an error document:\n{text[:2000]}\nQuery was:\n{adql}")
         if not text.strip():
