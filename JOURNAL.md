@@ -1185,3 +1185,70 @@ half of the objects with a real Hα fail the gate because individual dithers are
 which uses all the flux rather than a per-dither peak test.
 
 Tests: **311 offline**.
+
+---
+
+## 2026-09-17 — session 11: towards a general-purpose redshift engine
+
+### Why
+
+The user's requirement is redshifts for *any* Euclid spectrum with features,
+including z < 0.9, where the red grism carries no optical emission lines and the
+information is in the stellar continuum (1.6 µm bump, CO bandheads, Mg I/Al I,
+Paschen absorption) plus weak Pa-β/Pa-γ/He I/[S III] emission.  Our identifier
+was emission-line-only with a nuisance spline continuum; it cannot do this, and
+neither, in practice, does Euclid:
+
+**Baseline on 500 bright low-z DESI galaxies** (z < 0.9, median z 0.18,
+median continuum S/N 41 per pixel):
+
+| method | agreement with DESI |
+|---|---:|
+| Euclid SPE, all (97 % have a solution) | **16 %** |
+| Euclid SPE, `spe_z_prob` > 0.99 (n = 253) | 25 % |
+| PHZ mode, within Δz/(1+z) < 0.05 | 62 % |
+| our emission-line scan | 1.4 % |
+
+SPE's upper quartile lands at z = 1.61 for galaxies DESI puts at z ≈ 0.3: it
+manufactures an Hα.  Bright continua with real stellar features and a 16 %
+spectroscopic success rate is the opportunity.
+
+### What the community does, and what we take from it
+
+Euclid SPE (AMAZED): BC03 continua + 14 empirical line-ratio templates, three
+object classes, redshift PDF and per-class evidence.  DESI Redrock: PCA or
+archetype templates per class, χ² on a redshift grid, best-minus-runner-up Δχ²
+as reliability, `ZWARN` bits.  QuasarNET: learned per-line detection for QSOs.
+Our engine already has the Redrock *structure* (joint linear fit at each z,
+class comparison, Δχ² margin, prior, quality bits).  What it lacks is
+**templates that reach 1.25–1.85 µm**.
+
+Redrock's own templates were checked directly (files downloaded and headers
+read): GALAXY 1228–11000 Å rest, QSO-LOZ 1329–9634, QSO-HIZ 444–4499, STAR
+3000–11000.  They cover the Euclid window fully only for z ≥ 0.68 (galaxies),
+≥ 0.92 (QSO) and never for stars — built for DESI's 3600–9800 Å.  The
+algorithm transfers; the templates do not.
+
+### Libraries obtained (`~/data/euclid/templates/`, provenance in its README)
+
+- **XSL SSP models** (Verro et al. 2022): 390 SSPs, 350–2475 nm, R ≈ 30 000,
+  log t = 7.7–10.2, [M/H] −2.2 to +0.2, Kroupa, PARSEC/COLIBRI.  Empirical
+  stellar spectra, so the H-band features are real (`plots/xsl_ssp_nir.png`).
+  **Telluric gaps** at rest 1.35–1.425 µm and > 1.80 µm (fractional roughness
+  9–25 % vs 1–2 % elsewhere) must be masked and bridged; Euclid sees those
+  regions cleanly.
+- **XSL DR3 stellar spectra** (830 spectra, 683 stars, 350–2480 nm) — for the
+  STAR class.  Downloading (772 MB).
+- **Glikman et al. 2006 quasar composite**, 0.58–3.5 µm — for the QSO class at
+  low redshift; the rest-UV/optical composite for z > 1.5 still to add.
+- E-MILES (1680–50000 Å) is behind a password-protected share; XSL supersedes
+  it for our purpose.  BC03/BaSeL theoretical NIR spectra are the telluric-free
+  complement if bridging the XSL gaps proves insufficient.
+
+### Plan (unchanged from the discussion): 
+1. template loader with masking/bridging and Euclid-frame projection;
+2. low-dimensional continuum basis per class (PCA/archetypes of the SSPs);
+3. class-comparison engine replacing `rank_by="template"` inside the scan;
+4. validate on the 218 Hα-window and 500 low-z DESI sets — numbers to beat
+   64 % (coherent Hα sample) and 16 % (Euclid SPE at low z);
+5. broad-line truth set (DESI QSOs) for the QSO class.
