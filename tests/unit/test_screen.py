@@ -449,3 +449,22 @@ def test_prior_breaks_the_single_line_degeneracy():
     best = with_prior.loc[with_prior["rank_statistic_prior"].idxmax()]
     assert best["system"] == "halpha_complex"
     assert abs(best["z"] - Z) < 0.01
+
+
+def test_lines_in_a_masked_gap_get_no_flux_and_fail_containment():
+    """A 60-pixel masked gap must stay a gap, not become two enormous pixels."""
+    from euclid_agn.fit.screen import broad_column
+
+    n = sir_wavelength_grid().size
+    mask = np.zeros(n, dtype=int)
+    mask[220:280] = 1  # NOT_USE across ~800 A
+    spectrum = make([], mask=mask, seed=90)
+    projected = prepare(spectrum, ScreenSettings())
+    # pixel widths on the kept grid are all one bin, none swollen by the gap
+    assert np.allclose(projected.widths, 13.4, atol=0.05)
+    gap_centre = 0.5 * (spectrum.wavelength[220] + spectrum.wavelength[279])
+    z_gap = gap_centre / 6564.61 - 1.0
+    assert broad_column(projected, "Halpha", z_gap, 1500.0, min_containment=0.8) is None
+    # and a column near the gap edge integrates to its true contained flux
+    column = projected.line_column(spectrum.wavelength[210], 20.0)
+    assert 0.5 < np.sum(column * projected.widths) < 1.0

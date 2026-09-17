@@ -228,27 +228,32 @@ class ProjectedSpectrum:
     bin_width: float
     lsf_sigma: float
     chi2_continuum: float
-    edges: np.ndarray | None = None  # pixel edges, computed once in prepare()
+    edges: np.ndarray | None = None  # (n_kept, 2) true lower/upper edge of each kept pixel
     n_outliers: int = 0  # narrow outlier pixels rejected before fitting
 
     def __post_init__(self) -> None:
         if self.edges is None:
-            from euclid_agn.spectra.lsf import pixel_edges
-
-            self.edges = pixel_edges(self.wavelength, self.bin_width)
-        self.widths = np.diff(self.edges)
+            # Fallback for callers that build a ProjectedSpectrum by hand:
+            # assume a contiguous grid of the stated bin width.
+            half = 0.5 * self.bin_width
+            self.edges = np.column_stack([self.wavelength - half, self.wavelength + half])
+        self.widths = self.edges[:, 1] - self.edges[:, 0]
 
     def line_column(self, centre: float, sigma_angstrom: float) -> np.ndarray:
-        """Unit-flux, pixel-integrated Gaussian on the cached pixel edges.
+        """Unit-flux Gaussian integrated over each *kept* pixel's true edges.
 
-        Identical to :func:`euclid_agn.spectra.lsf.gaussian_pixel_integral`
-        but without recomputing the edges for every one of the tens of
-        thousands of columns a blind scan builds.
+        The edges come from the full archive grid, so a masked gap between two
+        kept pixels contributes nothing: a line falling in the gap gets no
+        flux on the kept pixels and fails containment, instead of the gap's
+        width being assigned to its neighbours.  VERIFIED failure before this
+        fix: a broad column drawn as a straight line across a 60-pixel gap, on
+        which a Delta chi-squared of 820 was built.
         """
         from scipy.special import erf
 
-        z = (self.edges - centre) / (np.sqrt(2.0) * sigma_angstrom)
-        return np.diff(0.5 * (1.0 + erf(z))) / self.widths
+        lower = 0.5 * (1.0 + erf((self.edges[:, 0] - centre) / (np.sqrt(2.0) * sigma_angstrom)))
+        upper = 0.5 * (1.0 + erf((self.edges[:, 1] - centre) / (np.sqrt(2.0) * sigma_angstrom)))
+        return (upper - lower) / self.widths
 
     @blas_safe
     def project(self, columns: np.ndarray) -> np.ndarray:
@@ -291,6 +296,11 @@ def prepare(spectrum, settings: ScreenSettings = ScreenSettings()) -> ProjectedS
     wavelength = spectrum.wavelength[keep]
     flux = spectrum.flux[keep]
     weight = 1.0 / np.sqrt(spectrum.variance[keep])
+    # True pixel edges from the full grid, then subset: gaps stay gaps.
+    from euclid_agn.spectra.lsf import pixel_edges
+
+    full_edges = pixel_edges(spectrum.wavelength, spectrum.bin_width)
+    edges = np.column_stack([full_edges[:-1][keep], full_edges[1:][keep]])
 
     design, _ = bspline_basis(wavelength, n_knots=settings.n_knots)
     whitened = design * weight[:, None]
@@ -305,6 +315,7 @@ def prepare(spectrum, settings: ScreenSettings = ScreenSettings()) -> ProjectedS
         bin_width=float(spectrum.bin_width),
         lsf_sigma=float(spectrum.lsf_sigma),
         chi2_continuum=float(residual @ residual),
+        edges=edges,
         n_outliers=n_outliers,
     )
 
