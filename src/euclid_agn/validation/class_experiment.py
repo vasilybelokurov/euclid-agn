@@ -70,7 +70,7 @@ def build_engine(wavelength, bin_width, star_source: str = "xsl") -> RedshiftEng
     return RedshiftEngine(specs, wavelength, bin_width)
 
 
-def run(sample: pd.DataFrame, cache: Path = DEFAULT_CACHE, star_source: str = "xsl") -> pd.DataFrame:
+def run(sample: pd.DataFrame, cache: Path = DEFAULT_CACHE, star_source: str = "xsl", with_rvspecfit: bool = False) -> pd.DataFrame:
     engine = None
     rows = []
     started = time.time()
@@ -88,6 +88,17 @@ def run(sample: pd.DataFrame, cache: Path = DEFAULT_CACHE, star_source: str = "x
                "desi_z": float(row.get("desi_z", np.nan)), "H_mag": float(row.get("H_mag", np.nan)),
                "snr": float(np.nanmedian(rescaled.flux[np.isin(rescaled.wavelength, projected.wavelength)] * projected.weight))}
         out.update(res.as_row())
+        if with_rvspecfit:
+            # same (rescaled) spectrum, so rvspecfit's stellar chi2 is comparable with the engine's class chi2
+            from euclid_agn.external.rvspecfit_star import fit_star
+
+            try:
+                sf = fit_star(rescaled)
+            except Exception as exc:  # noqa: BLE001 - external code; record and continue
+                log.warning("rvspecfit failed on %s: %s", row["object_id"], exc)
+                sf = None
+            if sf is not None:
+                out.update(sf.as_row())
         rows.append(out)
     log.info("%d objects in %.0f s", len(rows), time.time() - started)
     return pd.DataFrame(rows)
@@ -105,6 +116,11 @@ def summarise(t: pd.DataFrame) -> str:
             lines.append(f"   GALAXY fraction {(g['class']=='GALAXY').mean():.0%}; of those, z within 0.01: {ok:.0%}")
         strong = g[g.delta_chi2_class > 25]
         lines.append(f"   with class margin > 25: {len(strong)/len(g):.0%} of set; classes {strong['class'].value_counts().to_dict()}")
+        if "rvs_chi2" in g and g["rvs_chi2"].notna().any():
+            # DESI-style rule: star if rvspecfit's chi2 beats the best non-stellar class chi2
+            best_nonstar = g[["chi2_galaxy", "chi2_qso"]].min(axis=1) if "chi2_qso" in g else g["chi2_galaxy"]
+            star_by_rvs = g["rvs_chi2"] < best_nonstar
+            lines.append(f"   rvspecfit chi2 < best GALAXY/QSO chi2 (DESI rule): {star_by_rvs.mean():.0%}; median rvs reduced chi2 {(g.rvs_chi2/g.rvs_n_pixels).median():.2f}")
     return "\n".join(lines)
 
 
@@ -112,9 +128,10 @@ def main(argv=None) -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--out", type=Path, default=Path("outputs/class_experiment.parquet"))
     parser.add_argument("--star-source", default="xsl")
+    parser.add_argument("--with-rvspecfit", action="store_true")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    table = run(labelled_sets(), star_source=args.star_source)
+    table = run(labelled_sets(), star_source=args.star_source, with_rvspecfit=args.with_rvspecfit)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     table.to_parquet(args.out, index=False)
     print(summarise(table))
