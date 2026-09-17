@@ -1732,3 +1732,20 @@ completeness; archetype STAR class = 84 % completeness, ~90 % purity vs DESI
 galaxies.  rvspecfit's parameters are the science product (Teff, log g,
 [Fe/H], v at 0.2 s per spectrum); the class decision should use both votes,
 with the margin thresholds calibrated on the point-source and DESI sets.
+
+### Class purity v3: non-negative QSO (`outputs/class_experiment_v3.parquet`, 1,217 objects, 786 s incl. rvspecfit)
+
+| set (label) | GALAXY | QSO | STAR | rvspecfit star rule |
+|---|---:|---:|---:|---:|
+| DESI low-z galaxies (250) | **75 %** (66 → 75) | 13 % | 12 % | 3 % |
+| DESI Hα galaxies (218, S/N ≈ 3) | **57 %** (44 → 57) | 31 % | 11 % | 3 % |
+| point sources, SPE = star (394) | 6 % | 2 % | **92 %** | ~50 % |
+| point sources, SPE = galaxy (305) | 12 % | 6 % | 82 % | ~40 % |
+
+Class margin > 25 is reached by 49 % of low-z galaxies (110 of 122 → GALAXY)
+and 77 % of point sources (544 of 577 → STAR).  Remaining QSO false
+positives on faint ELGs (31 %) are the next target: the QSO class uses the
+continuum-only scan, whereas the GALAXY class in production will use the
+adaptive engine (lines + spline at this S/N) — the class comparison must be
+made on a common nuisance model, which is the open design question for the
+production classifier.
