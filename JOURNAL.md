@@ -1659,3 +1659,27 @@ State of the GALAXY class at the end of session 11: one engine, two models
 chosen by S/N and redshift evidence, 47 % at z ≈ 1 (SPE 27 %) and 47 % at
 z < 0.9 (SPE 20 %) against DESI at |Δz|/(1+z) < 0.01, with the PHZ prior;
 purity rises with the Δχ² margin on the dither-scatter variance.
+
+### PHOENIX downloaded; rvspecfit configuration; first class-purity run
+
+- PHOENIX ACES R = 10 000 bundles for Z = 0, −0.5, −1, −2 (2.33 GB) in
+  `~/data/euclid/templates/phoenix/`; 841–846 spectra each, `AWAV-LOG` grid
+  3000–25 000 Å (Δln λ = 10⁻⁵), no gaps.  Loader `load_phoenix_star/
+  load_phoenix_library`.  PHOENIX STAR PCA (Z = 0, every 2nd Teff, 376
+  spectra): 8 components explain 99.86 %.
+- `scripts/rvspecfit_nisp_setup.sh`: wavelength file from the log grid,
+  `rvs_read_grid` (prefix needs a trailing slash — it concatenates),
+  `rvs_make_interpol --resol_func "x/32.3" --step 6.7` (vacuum), `rvs_make_nd`,
+  `rvs_make_ccf`.  The CCF step asserted on parameter normalisation because
+  [α/M] ≡ 0 in our grid; re-running with `--parameter_names teff,logg,feh`.
+- **numpy was upgraded 1.x → 2.5.3 as a side effect of `pip install
+  rvspecfit`** (not intended; the venv is shared).  The only breakage was
+  the removed `ndarray.ptp()` (fixed to `np.ptp`); 343 tests pass on 2.5.3.
+- Class purity, 3-class engine with the XSL PCA-8 STAR class
+  (`outputs/class_experiment_xsl.parquet`, 1,217 objects, 311 s):
+  STAR wins for 711/749 Gaia-matched point sources — but also for 63 % of
+  DESI low-z galaxies and 73 % of Hα galaxies.  An 8-component free-sign PCA
+  + polynomial fits any smooth continuum; compared by raw χ² against NNLS
+  galaxy archetypes it is simply the more flexible model.  Classes must be
+  equally constrained: STAR re-done as non-negative PHOENIX archetypes
+  (dwarf + giant sequences every 500 K, Z = 0 and −1).
