@@ -1711,3 +1711,24 @@ continuum): 0.2 s per spectrum.  Three bright Gaia point sources: Teff
 archive variance; two DESI galaxies forced to v = +520/+790 km/s with
 reduced χ² 8.8 / 2.3 — the stellar fit alone does not reject a galaxy, the
 class comparison must.
+
+### rvspecfit as the star vote (`outputs/class_experiment_phoenix_arch_rvs.parquet`, 1,217 objects, 796 s incl. rvspecfit)
+
+DESI rule "star if rvspecfit χ² < best GALAXY/QSO χ²" (same rescaled
+variance): fires for **0 % of Hα galaxies and 2 % of low-z galaxies**
+(2nd-percentile margin +9: rvspecfit never beats the galaxy model on a real
+galaxy) and for 46 % of the Gaia-matched point sources — 51 % of SPE's
+"stars", 40 % of SPE's "galaxies".  The SPE label does not separate these
+two groups at all: identical Teff (3200–5100 K, median ~4000), identical
+|v| (55 km/s), identical H (17.2).  They are one population of K/M dwarfs,
+and SPE's star/galaxy split among them is noise.  Our NNLS-archetype STAR
+class calls 84 % of them stars (88 % of SPE-stars, 80 % of SPE-galaxies).
+
+Flexibility asymmetry, now in the other direction: rvspecfit fits *one*
+interpolated star × 4th-order polynomial; GALAXY is an 18-component NNLS
+mixture; on half the stars the mixture wins by a little (median margin 0 for
+SPE-stars).  So: rvspecfit rule = high purity (~100 % vs DESI galaxies), ~50 %
+completeness; archetype STAR class = 84 % completeness, ~90 % purity vs DESI
+galaxies.  rvspecfit's parameters are the science product (Teff, log g,
+[Fe/H], v at 0.2 s per spectrum); the class decision should use both votes,
+with the margin thresholds calibrated on the point-source and DESI sets.
