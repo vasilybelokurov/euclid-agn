@@ -76,6 +76,48 @@ def dither_coherence(observation, threshold: float = 5.0, min_dithers: int = 2, 
     return CoherenceReport(reduced, n_usable, bad, median, float(cut))
 
 
+def dither_variance_rescale(observation, window: int = 31, floor: float = 1.0, cap: float = 100.0,
+                            hard_mask_factor: float = 5.0):
+    """Combined spectrum with variance scaled by the *local* dither-to-dither excess.
+
+    On bright extended Q1 galaxies the median per-pixel reduced chi-squared of
+    the four dithers about their mean is ~5, not the ~2 the residual
+    autocorrelation of the combined spectrum implies: the exposures disagree
+    at 2.3 sigma on typical pixels (extraction footprint, detector, flux
+    calibration).  Rather than mask the tail of that broad distribution, the
+    archive variance is multiplied by a running median (``window`` pixels) of
+    the reduced chi-squared, floored at ``floor`` and capped at ``cap``, so
+    wavelength ranges where the dithers disagree carry less weight and the
+    Delta chi-squared values come out on an honest scale.  Pixels above
+    ``hard_mask_factor`` times the local level are still masked (gross
+    contamination).  Returns ``(spectrum, report)``; the unchanged combined
+    spectrum if there are fewer than 2 dithers.
+    """
+    from scipy.ndimage import median_filter
+
+    report = dither_coherence(observation, threshold=hard_mask_factor, grow=1)
+    combined = observation.combined
+    if report is None:
+        return combined, None
+    reduced = report.reduced_chi2
+    ok = np.isfinite(reduced)
+    if ok.sum() < window:
+        return combined, report
+    filled = np.where(ok, reduced, np.nanmedian(reduced[ok]))
+    local = median_filter(filled, size=window, mode="nearest")
+    scale = np.clip(local, floor, cap)
+    # gross contamination: the global-median test of dither_coherence (a wide
+    # contaminated stretch would otherwise raise the *local* level and hide itself)
+    hard = report.bad
+    from dataclasses import replace
+
+    metadata = {**combined.metadata, "dither_variance_scale_median": float(np.median(scale)),
+                "extra_mask_coherence": int(hard.sum())}
+    out = replace(combined, variance=combined.variance * scale,
+                  mask=np.where(hard, combined.mask | 1, combined.mask), metadata=metadata)
+    return out, report
+
+
 def apply_coherence_mask(observation, **kwargs):
     """The combined spectrum with incoherent pixels set NOT_USE (or unchanged if no dithers)."""
     report = dither_coherence(observation, **kwargs)
@@ -84,4 +126,4 @@ def apply_coherence_mask(observation, **kwargs):
     return observation.combined.with_extra_mask(report.bad, reason="coherence"), report
 
 
-__all__ = ["CoherenceReport", "dither_coherence", "apply_coherence_mask"]
+__all__ = ["CoherenceReport", "dither_coherence", "apply_coherence_mask", "dither_variance_rescale"]

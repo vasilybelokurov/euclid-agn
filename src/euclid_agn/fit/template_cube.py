@@ -132,8 +132,17 @@ def cube_scan(
     prior_sigma: float = 0.05,
     prior_outlier_fraction: float = 0.13,
     spline_nuisance: bool = False,
+    multiplicative_degree: int = 0,
+    multiplicative_iterations: int = 2,
 ) -> ContinuumScanResult | None:
     """Chi-squared of the cube's templates (+ polynomial) at every redshift.
+
+    ``multiplicative_degree`` > 0 multiplies the template mixture by
+    ``1 + sum_k p_k L_k(x)`` (rvspecfit's continuum correction; flux-calibration
+    and aperture errors are multiplicative).  The problem is bilinear, so it is
+    solved by alternation: mixture at P = 1, then P given the mixture (linear),
+    then the mixture again with the templates multiplied by P -
+    ``multiplicative_iterations`` rounds.  Always the per-redshift loop.
 
     ``spline_nuisance``: instead of the polynomial, the spline continuum basis
     already in ``projected`` (``n_knots`` of the ScreenSettings used to prepare
@@ -182,7 +191,33 @@ def cube_scan(
     scale = np.where(scale > 0, scale, 1.0)
     design = design / scale
     idx = np.flatnonzero(covered)
-    if not nonnegative:
+    if multiplicative_degree > 0:
+        mult = polynomial_columns(projected.wavelength, multiplicative_degree, reference=spectrum.wavelength)[:, 1:]
+        n_t = templates.shape[2]
+        for j, i in enumerate(idx):
+            base = design[j]  # scaled columns: templates then additive poly
+            cols = base.copy()
+            for _ in range(multiplicative_iterations + 1):
+                if nonnegative:
+                    a = np.concatenate([cols[:, :n_t], cols[:, n_t:], -cols[:, n_t:]], axis=1)
+                    c, rnorm = nnls(a, data_w, maxiter=50 * a.shape[1])
+                    c = np.concatenate([c[:n_t], c[n_t : n_t + poly.shape[1]] - c[n_t + poly.shape[1] :]])
+                    c2 = rnorm**2
+                else:
+                    c, *_ = np.linalg.lstsq(cols, data_w, rcond=None)
+                    r = data_w - cols @ c
+                    c2 = float(r @ r)
+                mixture = base[:, :n_t] @ c[:n_t]  # whitened template part, before P
+                if mult.shape[1] == 0:
+                    break
+                resid = data_w - cols @ c
+                pcols = mixture[:, None] * mult
+                pc, *_ = np.linalg.lstsq(pcols, resid + (cols[:, :n_t] @ c[:n_t] - mixture), rcond=None)
+                factor = 1.0 + mult @ pc
+                cols = np.concatenate([base[:, :n_t] * factor[:, None], base[:, n_t:]], axis=1)
+            chi2[i] = c2
+            coefficients[i] = c / scale[j, 0, :]
+    elif not nonnegative:
         # batched minimum-norm least squares (pinv tolerates the rank
         # deficiency a flat template + constant polynomial column produces);
         # chi-squared from explicit residuals, never by cancellation

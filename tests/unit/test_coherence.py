@@ -44,3 +44,16 @@ def test_clean_observation_flags_almost_nothing_and_mask_is_applied():
     assert spectrum.metadata["extra_mask_coherence"] == rep2.n_bad
     assert not spectrum.usable()[300:340].any()
     assert obs.combined.mask.sum() == 0  # original untouched
+
+
+def test_variance_rescale_tracks_local_dither_scatter():
+    from euclid_agn.spectra.coherence import dither_variance_rescale
+
+    obs = make_observation(contaminate=True)
+    spectrum, rep = dither_variance_rescale(obs)
+    ratio = spectrum.variance / obs.combined.variance
+    assert ratio.min() >= 1.0
+    assert np.median(ratio[:250]) < 2.0  # clean region: about the nominal noise
+    assert ratio[300:340].mean() > 5.0  # contaminated region: strongly down-weighted
+    assert not spectrum.usable()[310:330].any()  # gross contamination still hard-masked
+    assert spectrum.metadata["dither_variance_scale_median"] >= 1.0

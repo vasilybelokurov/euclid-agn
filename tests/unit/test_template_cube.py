@@ -101,3 +101,23 @@ def test_spline_nuisance_recovers_redshift_from_features_only():
     assert res.n_parameters == 2 + projected.basis.shape[1]
     # the data are orthogonal to the spline, so the null chi2 is the projected chi2
     assert res.chi2_null == pytest.approx(projected.chi2_continuum, rel=1e-9)
+
+
+def test_multiplicative_polynomial_corrects_a_tilted_spectrum():
+    spectrum = toy_spectrum(z=0.08)
+    w = spectrum.wavelength
+    x = (w - w.mean()) / (np.ptp(w) / 2)
+    tilted = Spectrum1D(wavelength=w, flux=spectrum.flux * (1 + 0.3 * x - 0.2 * x**2), variance=spectrum.variance,
+                        mask=spectrum.mask, quality=spectrum.quality, lsf_sigma=14.0, bin_width=13.4)
+    projected = prepare(tilted, ScreenSettings(n_knots=1, outlier_threshold=0.0))
+    cube = build_cube(toy_templates(), redshift_grid(0.0, 0.3, 300.0), w, 13.4, 14.0)
+    additive = cube_scan(tilted, projected, cube, poly_degree=0)
+    mult = cube_scan(tilted, projected, cube, poly_degree=0, multiplicative_degree=2)
+    # a quadratic multiplicative correction can shift the toy's 800 A-wide bump by a few
+    # pixels, so the redshift is less sharply defined than with the additive fit
+    assert abs(mult.z - 0.08) < 0.006
+    assert mult.chi2 < 0.7 * additive.chi2  # the multiplicative correction absorbs the tilt (919 -> 491 in this toy)
+    assert mult.chi2 < 1.3 * projected.wavelength.size  # and reaches the noise level
+    # unconstrained mode takes the same path
+    free = cube_scan(tilted, projected, cube, poly_degree=0, multiplicative_degree=2, nonnegative=False)
+    assert abs(free.z - 0.08) < 0.006 and free.chi2 <= mult.chi2 + 1e-6

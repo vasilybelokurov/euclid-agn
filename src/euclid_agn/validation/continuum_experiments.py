@@ -31,7 +31,7 @@ from euclid_agn.constants import C_KMS
 from euclid_agn.fit.screen import ScreenSettings, prepare
 from euclid_agn.fit.joint_scan import joint_scan
 from euclid_agn.fit.template_cube import CubeStore, cube_scan, redshift_grid
-from euclid_agn.spectra.coherence import apply_coherence_mask
+from euclid_agn.spectra.coherence import apply_coherence_mask, dither_variance_rescale
 from euclid_agn.io.sir import open_sir_file
 from euclid_agn.models.library import (
     DEFAULT_ROOT,
@@ -66,6 +66,8 @@ class Variant:
     coherence_threshold: float = 5.0
     systematic_fraction: float = 0.0  # fractional flux error added in quadrature (template/calibration floor)
     joint: bool = False  # continuum + emission-line templates in one solve (fit/joint_scan.py)
+    variance_rescale: bool = False  # local dither-scatter variance rescaling instead of a hard mask
+    multiplicative_degree: int = 0  # rvspecfit-style multiplicative continuum polynomial
     extras: dict = field(default_factory=dict)
 
     def templates(self, root=DEFAULT_ROOT) -> list[Template]:
@@ -161,25 +163,26 @@ def run_variants(
     rows = []
     started = time.time()
     n_spectra = 0
-    need_dithers = any(v.coherence_mask for v in variants)
+    need_dithers = any(v.coherence_mask or v.variance_rescale for v in variants)
     for item in iter_spectra(sample, cache, with_dithers=need_dithers):
         row, spectrum = item[0], item[1]
         observation = item[2] if need_dithers else None
         prepared = {}  # by (n_knots, masked): spline-nuisance variants need their own continuum basis
-        masked_spectrum, n_bad = None, 0
+        masked_spectrum, rescaled_spectrum, n_bad = None, None, 0
         if need_dithers:
             masked_spectrum, report = apply_coherence_mask(observation, threshold=max(v.coherence_threshold for v in variants))
             n_bad = report.n_bad if report is not None else 0
+            rescaled_spectrum, _ = dither_variance_rescale(observation)
         n_spectra += 1
         for v in variants:
             if v.name not in stores:
                 stores[v.name] = CubeStore({"GALAXY": v.templates(root)}, redshift_grid(0.0, v.z_max, v.step_kms),
                                            spectrum.wavelength, spectrum.bin_width)
             cube = stores[v.name].get("GALAXY", spectrum.lsf_sigma)
-            source = masked_spectrum if v.coherence_mask else spectrum
+            source = rescaled_spectrum if v.variance_rescale else (masked_spectrum if v.coherence_mask else spectrum)
             if v.systematic_fraction > 0:
                 source = with_systematic_floor(source, v.systematic_fraction)
-            key = (v.n_knots if v.nuisance == "spline" else 1, v.coherence_mask, v.systematic_fraction)
+            key = (v.n_knots if v.nuisance == "spline" else 1, v.coherence_mask, v.variance_rescale, v.systematic_fraction)
             if key not in prepared:
                 prepared[key] = prepare(source, ScreenSettings(**{**settings.__dict__, "n_knots": key[0]}))
             this = prepared[key]
@@ -190,7 +193,8 @@ def run_variants(
                                  z_prior=float(row.get("phz_median", np.nan)))
             else:
                 res = cube_scan(source, this, cube, poly_degree=v.poly_degree, nonnegative=v.nonnegative,
-                                z_prior=float(row.get("phz_median", np.nan)), spline_nuisance=v.nuisance == "spline")
+                                z_prior=float(row.get("phz_median", np.nan)), spline_nuisance=v.nuisance == "spline",
+                                multiplicative_degree=v.multiplicative_degree)
             if res is None:
                 continue
             desi_z = float(row["desi_z"])
@@ -253,6 +257,10 @@ DEFAULT_VARIANTS = [
     Variant("pca5_p2_coh_sys03", poly_degree=2, coherence_mask=True, systematic_fraction=0.03),
     Variant("arch_nnls_p3_joint", basis="archetypes", nonnegative=True, archetype_step=6, poly_degree=3, joint=True),
     Variant("arch_nnls_p3_coh_joint", basis="archetypes", nonnegative=True, archetype_step=6, poly_degree=3, joint=True, coherence_mask=True),
+    Variant("arch_nnls_p3_rescale", basis="archetypes", nonnegative=True, archetype_step=6, poly_degree=3, variance_rescale=True),
+    Variant("arch_nnls_m3", basis="archetypes", nonnegative=True, archetype_step=6, poly_degree=0, multiplicative_degree=3),
+    Variant("arch_nnls_p1m3", basis="archetypes", nonnegative=True, archetype_step=6, poly_degree=1, multiplicative_degree=3),
+    Variant("arch_nnls_m3_rescale", basis="archetypes", nonnegative=True, archetype_step=6, poly_degree=0, multiplicative_degree=3, variance_rescale=True),
 ]
 
 
