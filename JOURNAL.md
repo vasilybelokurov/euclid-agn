@@ -1884,3 +1884,42 @@ route — population-complete over 3.2 M spectra — is the one to quote, with
 the cached-scaling result as the lower bound.  Stars agree between routes:
 ~107,000 point sources with H < 17 (cached scaling) vs 112,000 star-class
 spectra with S/N ≥ 20 (census).
+
+## Session 12 — extragalactic globular clusters / UCDs as a redshift-and-RV test
+
+Idea (user): compact sources bound to a nearby galaxy are unresolved, have the
+simplest possible SED (one old single-burst population), and their velocity is
+known — the host's.  A test of the STAR/GALAXY class decision and of the
+velocity zero point that needs no new truth catalogue.
+
+**Feasibility, from the measured RV curves.** Old population: V − H_AB ≈ 1.6.
+Brightest ordinary GCs M_V ≈ −10…−11, UCDs/nuclear clusters −12.5…−14.
+At 50–100 Mpc a GC is H_AB ≈ 21–22 — far below the S/N ≳ 3 (H_AB ≲ 20) needed
+for any redshift, so the 50 < D < 100 Mpc range the user suggested is out of
+reach.  At D ≲ 25 Mpc the brightest GCs reach H_AB ≈ 18.5–19 and UCDs 17–18,
+where σ_v = 80–170 km/s — and the hosts sit at 1,000–2,600 km/s, i.e. 4–9 NISP
+pixels away from the Galactic-star velocity zero.  Expected yield per
+elliptical: ~3 GCs brighter than M_V = −10.5 (GCLF peak −7.5, σ = 1.3,
+N_GC ≈ 300), plus UCDs and dwarf-satellite nuclei.
+
+**Hosts** (HyperLEDA via WSDB, `leda.main`, cz < 3000 km/s inside the four Q1
+field cones; 20 found): NGC 1527 (E-S0, 16.8 Mpc, 1176 km/s), NGC 1340 (E,
+16.9, 1183), NGC 1339 (E, 19.9, 1392), IC 2035 (E-S0, 21.5, 1504), NGC 1398
+(SBab, 20.0, 1400), NGC 1366 (S0, 18.7, 1308), NGC 1412 (S0, 25.6, 1790),
+NGC 2110 (E-S0 Sy2, 33.0, 2312) …
+
+**Data route.**  IRSA's MER catalogue is unusable for this: a 10′ RA/Dec box
+query ran 1,402 s and died, and the same query restricted to four tiles
+returned HTTP 502.  Instead: CAOM cone → tile IDs (``CONTAINS(p.pt, CIRCLE(…))``
+— the reverse argument order and ``INTERSECTS`` are both rejected; ~6 min per
+host), association table → SIR file paths, download, then read **RA/Dec from
+each object's META HDU** and select by separation.  S/N is measured from the
+spectra themselves, which is what matters anyway.  None of the 46 already-cached
+files lies within 0.5° of any host.
+
+**Control (cached data, `102041031`).** The same code path on an arbitrary
+position: of 168 objects within 4′, 27 have S/N > 3.  The three brightest
+(S/N 59–263) are classified **STAR** by the 3-class engine with rvspecfit
+velocities +40, −123, +112 km/s — the Galactic-star null the GC test needs,
+and a demonstration that the class engine does not manufacture redshifts for
+bright point sources.
