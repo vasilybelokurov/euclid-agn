@@ -1498,3 +1498,28 @@ with S/N — rich archetype mixtures for bright continua, 2–3 components for
 faint ones — or the continuum and line scans stay separate hypotheses
 combined by evidence.  Testing 2-, 3- and 6-component joint fits on the same
 sample.
+
+### Sweep 4: multiplicative polynomial and dither-scatter variance (489 low-z, |Δz|/(1+z) < 0.01)
+
+| variant | agree | +prior | reduced χ² | purity Δχ²>10 (kept) |
+|---|---:|---:|---:|---:|
+| archetypes + additive cubic | 43.8 % | 40.9 | 2.38 | 43 % (80 %) |
+| archetypes × **multiplicative cubic** (rvspecfit-style) | **45.8 %** | 40.7 | 2.50 | 44 % (83 %) |
+| multiplicative cubic + additive linear | 43.8 % | | 2.43 | |
+| additive cubic + dither-scatter variance | 40.1 % | | 0.66 | 64 % (41 %) |
+| **multiplicative cubic + dither-scatter variance** | 45.2 % | 41.9 | 0.70 | **62 % (47 %)** |
+
+The multiplicative correction is worth +2 points (flux-calibration and
+aperture errors are multiplicative).  Rescaling the variance by the local
+dither scatter puts χ² on an honest scale (reduced χ² 0.7 — slightly over-
+corrected, the 3-dof scatter estimate is noisy) and, with the multiplicative
+cubic, keeps the accuracy while making the Δχ² margin *mean* something:
+62 % purity at Δχ² > 10 for 47 % of objects, against 44 % / 83 % on the
+archive variance.  Adopted for the GALAXY continuum class: archetypes ×
+multiplicative cubic, dither-scatter variance.
+
+### Low-dimensional joint fits on the Hα sample (218 objects)
+
+PCA-2 / PCA-3 + linear + lines: 5.0 / 3.2 %; 6 / 3 archetypes NNLS + lines:
+15.1 / 13.8 %.  Continuum freedom is not why the joint fit trails the
+line-only scan (35.8 %); investigating the prior and the line model itself.
