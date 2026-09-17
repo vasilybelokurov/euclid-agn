@@ -102,6 +102,22 @@ def main(argv=None) -> None:
         if "G" not in t.columns:
             t = t.rename(columns={"G_gaia": "G"})
     t["V"] = t.G - g_minus_v(t.bp_rp)
+    # stars without Gaia G (or outside the BP-RP validity range): G and V from Euclid I_E and H
+    try:
+        from euclid_agn.validation.star_photometry_calibration import COEF_PATH, euclid_g_v, mer_photometry
+
+        if COEF_PATH.exists():
+            need = t.G.isna() | t.V.isna()
+            if need.any():
+                mer = mer_photometry(t.loc[need, "object_id"])
+                m = t.loc[need, ["object_id"]].merge(mer[["object_id", "I_E", "H_E"]], on="object_id", how="left")
+                G_hat, V_hat = euclid_g_v(m.I_E.values, m.H_E.values)
+                t.loc[need, "G"] = np.where(t.loc[need, "G"].isna(), G_hat, t.loc[need, "G"])
+                t.loc[need, "V"] = np.where(t.loc[need, "V"].isna(), V_hat, t.loc[need, "V"])
+                t.loc[need, "mag_source"] = "euclid_calibrated"
+            t["mag_source"] = t.get("mag_source", pd.Series(index=t.index, dtype=object)).fillna("gaia")
+    except Exception as exc:  # noqa: BLE001
+        log.warning("photometric G/V fallback unavailable: %s", exc)
     t.to_parquet(args.table.with_name(args.table.stem + "_mags.parquet"), index=False)
     cv = {m: curves(t, m, edges) for m, edges in (("G", np.arange(13, 22, 1.0)), ("V", np.arange(13, 23, 1.0)), ("H_mag", np.arange(12, 20, 1.0))) if m in t}
     cv = {m: c for m, c in cv.items() if len(c)}
