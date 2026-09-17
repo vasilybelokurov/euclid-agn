@@ -1645,3 +1645,17 @@ Template preparation needs the PHOENIX grid on disk (`rvs_read_grid --prefix
 (FWHM 32.3 Å) for point sources, so R = λ/32.3 varies from 370 to 590 across
 the grism and `--resol_func` expresses that exactly.  Download of the PHOENIX
 subset pending the user's go-ahead.
+
+### Holdout confirmation (`outputs/galaxy_engine_holdout.parquet`)
+
+112-object DESI holdout (106 in the cache; z 0.95–1.43; never used for any
+tuning): adaptive engine **47.2 %** with the prior (23.6 % data only) —
+identical to the 47.2 % on the tuning sample.  Euclid SPE on the same
+objects: 26.8 %.  Session-10 matched filter on this holdout: 61–76 % *where
+Hα was detectable*, 35 % overall; the engine's overall figure is the one to
+compare with.  No sign of overfitting from the S/N-switch tuning.
+
+State of the GALAXY class at the end of session 11: one engine, two models
+chosen by S/N and redshift evidence, 47 % at z ≈ 1 (SPE 27 %) and 47 % at
+z < 0.9 (SPE 20 %) against DESI at |Δz|/(1+z) < 0.01, with the PHZ prior;
+purity rises with the Δχ² margin on the dither-scatter variance.
