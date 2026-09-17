@@ -135,7 +135,10 @@ def default_specs(galaxy_templates: list[Template], qso_templates: list[Template
     """
     specs = [ClassSpec("GALAXY", galaxy_templates, 0.0, z_max_galaxy, nonnegative=galaxy_nonnegative)]
     if qso_templates:
-        specs.append(ClassSpec("QSO", qso_templates, 0.0, z_max_qso, extra_sigma_kms=1500.0))
+        # a single composite: its amplitude must be positive, or a negative quasar plus polynomial
+        # becomes a free smooth-continuum model that wins on faint spectra (VERIFIED: 47 % of z ~ 1
+        # DESI emission-line galaxies were called QSO with a free-sign amplitude)
+        specs.append(ClassSpec("QSO", qso_templates, 0.0, z_max_qso, extra_sigma_kms=1500.0, nonnegative=True))
     if star_templates:
         specs.append(ClassSpec("STAR", star_templates, -0.002, 0.002, step_kms=100.0, use_prior=False,
                                nonnegative=star_nonnegative))

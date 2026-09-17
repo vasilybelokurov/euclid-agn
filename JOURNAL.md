@@ -1683,3 +1683,31 @@ purity rises with the Δχ² margin on the dither-scatter variance.
   galaxy archetypes it is simply the more flexible model.  Classes must be
   equally constrained: STAR re-done as non-negative PHOENIX archetypes
   (dwarf + giant sequences every 500 K, Z = 0 and −1).
+
+### Class purity with equally constrained classes (`outputs/class_experiment_phoenix_arch.parquet`)
+
+STAR = 56 non-negative PHOENIX archetypes (dwarf and giant sequences every
+500 K, Z = 0 and −1), GALAXY = 18 NNLS archetypes, QSO = Glikman composite
+(free sign), all with a linear nuisance; 1,217 objects, 529 s.
+
+| set (label) | GALAXY | QSO | STAR |
+|---|---:|---:|---:|
+| DESI low-z galaxies (250) | **66 %** (was 30 % with PCA stars) | 24 % | 10 % |
+| DESI Hα galaxies (218, S/N ≈ 3) | 44 % | **47 %** | 9 % |
+| point sources, SPE = star (394) | 4 % | 8 % | **88 %** |
+| point sources, SPE = galaxy (305) | 10 % | 9 % | 80 % |
+
+Constraining the stellar class removed its false wins.  The remaining
+over-flexible class is QSO: one composite with a *free-sign* amplitude plus
+polynomial is a smooth-continuum model that wins at S/N ≈ 3 over 1,100 trial
+redshifts.  Fixed: QSO amplitude non-negative.  For the 305 Gaia-matched
+point sources that SPE calls galaxies, our engine says star for 80 % — the
+rvspecfit stellar χ² (running) is the independent vote.
+
+rvspecfit on Euclid (wrapper `external/rvspecfit_star.py`, config
+`~/data/euclid/rvspecfit/config.yaml`, ±1500 km/s, 4th-order multiplicative
+continuum): 0.2 s per spectrum.  Three bright Gaia point sources: Teff
+3200–3500 K, v = −54…−98 ± 11–15 km/s (formal), reduced χ² 7.6–20 on the
+archive variance; two DESI galaxies forced to v = +520/+790 km/s with
+reduced χ² 8.8 / 2.3 — the stellar fit alone does not reject a galaxy, the
+class comparison must.
