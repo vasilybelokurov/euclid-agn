@@ -1990,3 +1990,52 @@ library doesn't cover this wavelength range" — with the ±3000 km/s search the
 spectrum shifted by 1 % runs past the template edge at 19163 Å.  Templates
 rebuilt over 11500–19500 Å.  (The earlier stellar-RV results used ±1500 km/s
 and were unaffected.)
+
+### Verdict on the GC test: no detection, and the reason is measured
+
+Full sample: 409 point-like (LSF σ < 16 Å) sources with S/N > 10 within 10′ of
+NGC 1527, all fitted after the template fix; 143 with formal error < 200 km/s.
+Matched control: 395 objects from six random Q1 fields, identical cuts, 208
+good fits.
+
+| | NGC 1527 field | matched control | Fisher p |
+|---|---:|---:|---:|
+| \|v\| < 300 km/s (Galactic stars) | 61 % | 85 % | |
+| **900–1600 km/s (host window)** | **2 (1.4 %)** | **3 (1.4 %)** | **1.00** |
+| railed velocity \|v\| > 2900 | **19 %** | 3 % | |
+| railed Teff (< 2400 K) | 9.8 % | 0.5 % | |
+| window **and** railed Teff | 2 | 0 | 0.165 |
+
+**No excess at the host velocity.**  The two objects in the window
+(1152 ± 132 km/s at 2.0′, 1343 ± 63 km/s at 8.5′) look at first like
+integrated old populations — a single-star fitter should rail to its coolest
+template on a globular cluster — but their spectra
+(`plots/ngc1527_candidates.png`) are visibly corrupt: candidate A has
+order-overlap jumps at 16800/17000/17500 Å and a spike at 17250 Å, candidate B
+is flat with a 19000 Å edge artefact.  They are contamination, not clusters.
+
+The 19 % vs 3 % railing rate is the quantitative statement of the problem:
+**within 10′ of a bright galaxy, a fifth of slitless spectra are corrupted by
+its light and its neighbours' orders.**  Combined with the expected yield —
+~3 GCs per elliptical brighter than M_V = −10.5, landing at H_AB ≈ 18.5–19
+where σ_v = 200–500 km/s — the test cannot succeed at Q1 depth even for the
+nearest suitable hosts.  It would need either a much closer host (D ≲ 5 Mpc,
+none in the Q1 fields) or UCD-luminosity targets, of which a 17 Mpc S0 has
+one or two.
+
+**What the exercise did deliver** (all new, all measured):
+1. **Velocity accuracy on an extended source**: NGC 1527 itself, S/N 1246,
+   comes out at 1604 km/s against 1176 — a **428 km/s** error at LSF σ = 91 Å.
+   Extended-source velocity zero points are good to ~0.1 resolution element,
+   no better; relevant directly to AGN line centroids in resolved hosts.
+2. **Contamination near bright/extended hosts**: 19 % of spectra unusable
+   within 10′, against a 3 % field rate — a systematic the dwarf-AGN search
+   must carry, since dwarfs are often satellites of bright galaxies.
+3. **A TAP-free data route** (S3 listing + remote META reads) that works when
+   IRSA's catalogue service is down, as it was for most of this session.
+4. **Confirmation of the stellar RV work**: 85 % of random-field point sources
+   at S/N > 10 land within ±300 km/s, exactly as the star-velocity curves
+   predict.
+5. Physical point worth remembering: at z < 0.01 a passive galaxy and a star
+   are the same spectrum at R ≈ 450 — the class engine calling NGC 1527 a STAR
+   is correct behaviour, not a bug.
