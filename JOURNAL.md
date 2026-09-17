@@ -1625,3 +1625,11 @@ low-z objects with rescaled S/N in the 5–20 band went to the lines model
 guards were set on the archive-variance scale but applied on the rescaled
 one (a factor ~√5 lower).  Threshold trade-off measured next; note this is
 tuning on the same two samples — the holdout (112 objects) must confirm.
+
+Threshold trade-off (rescaled-S/N scale): a pure switch "lines below a,
+continuum above" gives 41.5 / 41.7 / 41.9 / 40.9 % (low-z) and 20.2 / 21.1 /
+22.0 / 22.0 % (Hα) for a = 3 / 5 / 8 / 12 — the choice barely matters
+because the 5–20 band is hard for *both* models (continuum model 5–27 %
+there, lines 3–7 %).  Set `snr_continuum = 8`; margins decide only in
+5 < S/N < 8.  The engine is at the ceiling the two models allow; the next
+gains must come from the models (young/dusty archetypes; line-width grid).

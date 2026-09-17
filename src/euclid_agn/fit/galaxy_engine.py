@@ -78,7 +78,7 @@ class GalaxyEngine:
     """Run models A and B and choose."""
 
     def __init__(self, store: CubeStore, n_knots: int = 12, multiplicative_degree: int = 3,
-                 min_continuum_snr: float = 0.0, snr_switch: float = 5.0, snr_continuum: float = 20.0,
+                 min_continuum_snr: float = 0.0, snr_switch: float = 5.0, snr_continuum: float = 8.0,
                  separation_kms: float = 3000.0, agreement_kms: float = 3000.0):
         self.store = store
         self.n_knots = n_knots
