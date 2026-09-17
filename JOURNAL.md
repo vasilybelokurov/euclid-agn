@@ -1610,3 +1610,18 @@ Absolute fit quality carries no redshift information.  Replaced by a
 *redshift-evidence* rule: compare the two curves' best-minus-runner-up
 margins on the same variance, with S/N guards (S/N < 5 → lines; S/N > 20 →
 continuum).  Re-running both samples.
+
+### Adaptive GALAXY engine, margin rule (`outputs/galaxy_engine_{halpha,lowz}.parquet`)
+
+| sample | chosen lines / continuum | engine, data only | engine + prior | lines model | continuum model | previous best |
+|---|---|---:|---:|---:|---:|---:|
+| Hα window (218, z 0.9–1.8) | 212 / 6 | 21.6 % | **47.2 %** | 22.0 / 48.2 % | 8.7 % | 37.6 % (matched filter) |
+| low-z (489, z < 0.9) | 83 / 406 | 41.9 % | **46.6 %** | 4.5 % | 41.5 % | 45.8 % (continuum sweep) |
+
+One engine now covers both regimes.  Where it chose the continuum model on
+the low-z sample it is right for 49.5 % (52.2 % with prior).  The leak: 83
+low-z objects with rescaled S/N in the 5–20 band went to the lines model
+(4.8 % right) where the continuum model would have given ~40 %; the S/N
+guards were set on the archive-variance scale but applied on the rescaled
+one (a factor ~√5 lower).  Threshold trade-off measured next; note this is
+tuning on the same two samples — the holdout (112 objects) must confirm.
