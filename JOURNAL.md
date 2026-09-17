@@ -1542,3 +1542,24 @@ continuum parameters — comparable to a faint ELG's Hα Δχ² (30–60).  Test
 with a single continuum template; if confirmed, the design becomes
 S/N-adaptive: z-independent nuisance continuum + lines for faint spectra,
 archetype continuum + lines for bright ones, chosen per object by evidence.
+
+### Why the joint fit trails the matched filter at z ≈ 1 — found
+
+One-template continuum: 16 % / 21 % (linear / cubic, with prior) — so it was
+not z-dependent continuum *noise*.  Three line-right/joint-wrong objects
+examined directly (`outputs/continuum_variants_halpha_arch1.parquet`):
+at the joint's winning z ≈ 0.26–0.33 the *same* line is Pa-β and the single
+old SSP + linear polynomial fits the continuum 150–480 χ² units better than
+the same SSP redshifted to the true z ≈ 1.3–1.5, where it would have to
+reproduce a young, dusty rest-optical ELG continuum that the archetype set
+(log t ≥ 8.5, no dust) does not contain.  The matched filter is immune
+because it projects out a 12-knot spline once: its χ²(z) moves only through
+the lines.  Template inadequacy, not noise, and not fixable by fewer
+templates.
+
+Fix implemented in `fit/joint_scan.py`: ``spline_nuisance`` projects the
+spline basis out of the data and of *every* column (continuum templates and
+lines) — χ²(z) then responds only to lines and sharp continuum features;
+``cube=None`` gives a pure line scan in the same framework (must reproduce
+the matched filter).  Running lines-only, 1-, 18-archetype and PCA-3
+variants with the spline on the Hα sample.

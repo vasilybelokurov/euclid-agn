@@ -76,6 +76,8 @@ class Variant:
             return pca_templates(build_pca_basis(lib, n_components=self.n_components, wmax=19500.0))
         if self.basis == "archetypes":
             return lib[:: self.archetype_step]
+        if self.basis == "none":
+            return lib[:1]  # placeholder so a grid/cube exists; the joint scan receives cube=None
         raise ValueError(self.basis)
 
 
@@ -191,8 +193,10 @@ def run_variants(
             if this is None:
                 continue
             if v.joint:
-                res = joint_scan(source, this, cube, poly_degree=v.poly_degree, nonnegative=v.nonnegative,
-                                 z_prior=float(row.get("phz_median", np.nan)), multiplicative_degree=v.multiplicative_degree)
+                res = joint_scan(source, this, None if v.basis == "none" else cube, poly_degree=v.poly_degree,
+                                 nonnegative=v.nonnegative, z_prior=float(row.get("phz_median", np.nan)),
+                                 multiplicative_degree=v.multiplicative_degree, spline_nuisance=v.nuisance == "spline",
+                                 grid_z=cube.grid_z)
             else:
                 res = cube_scan(source, this, cube, poly_degree=v.poly_degree, nonnegative=v.nonnegative,
                                 z_prior=float(row.get("phz_median", np.nan)), spline_nuisance=v.nuisance == "spline",
@@ -272,6 +276,11 @@ DEFAULT_VARIANTS = [
     # one continuum template: isolates the z-dependent continuum-fit noise hypothesis for faint ELGs
     Variant("arch1_nnls_p1_joint", basis="archetypes", nonnegative=True, archetype_step=108, poly_degree=1, joint=True),
     Variant("arch1_nnls_p3_joint", basis="archetypes", nonnegative=True, archetype_step=108, poly_degree=3, joint=True),
+    # spline-deprojected joint fits: chi2(z) from lines + sharp features only
+    Variant("lines_only_spline12", basis="none", joint=True, nuisance="spline", n_knots=12),
+    Variant("arch1_spline12_joint", basis="archetypes", nonnegative=True, archetype_step=108, joint=True, nuisance="spline", n_knots=12),
+    Variant("arch_nnls_spline12_joint", basis="archetypes", nonnegative=True, archetype_step=6, joint=True, nuisance="spline", n_knots=12),
+    Variant("pca3_spline12_joint", n_components=3, joint=True, nuisance="spline", n_knots=12),
 ]
 
 

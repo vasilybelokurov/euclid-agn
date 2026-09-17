@@ -86,8 +86,22 @@ def joint_scan(
     prior_outlier_fraction: float = 0.13,
     multiplicative_degree: int = 0,
     multiplicative_iterations: int = 2,
+    spline_nuisance: bool = False,
+    grid_z: np.ndarray | None = None,
 ) -> JointScanResult | None:
     """Chi-squared of continuum templates + line templates + polynomial at every redshift.
+
+    ``spline_nuisance``: the spline continuum basis in ``projected`` is
+    projected out of the data and of every column (continuum templates and
+    lines), replacing the polynomial.  chi2(z) then responds only to what a
+    smooth continuum cannot absorb - emission lines and sharp continuum
+    features - which is what makes the matched filter robust for faint
+    emission-line galaxies whose continuum no template set reproduces
+    (VERIFIED: a single old SSP at z = 0.26 beat the same SSP at the true
+    z = 1.46 by 150-480 chi2 units on S/N ~ 1 ELGs).
+
+    ``cube`` may be ``None``: a pure emission-line scan on ``grid_z`` (the
+    matched filter re-expressed in this framework).
 
     ``multiplicative_degree`` > 0 multiplies the *continuum* mixture by
     ``1 + sum p_k L_k`` (lines are not multiplied: their fluxes are what we
@@ -104,25 +118,44 @@ def joint_scan(
     keep = np.isin(spectrum.wavelength, projected.wavelength)
     weight = projected.weight
     data_w = spectrum.flux[keep] * weight
-    poly = polynomial_columns(projected.wavelength, poly_degree, reference=spectrum.wavelength) * weight[:, None]
-    covered = cube.covers(keep)
-    grid = cube.grid_z
+    basis = projected.basis if spline_nuisance else None
+
+    def deproject(columns: np.ndarray) -> np.ndarray:
+        return columns - basis @ (basis.T @ columns) if basis is not None else columns
+
+    data_w = deproject(data_w)
+    if spline_nuisance:
+        poly = np.zeros((weight.size, 0))
+    else:
+        poly = polynomial_columns(projected.wavelength, poly_degree, reference=spectrum.wavelength) * weight[:, None]
+    if cube is not None:
+        grid = cube.grid_z
+        covered = cube.covers(keep)
+        n_c = cube.n_templates
+    else:
+        if grid_z is None:
+            raise ValueError("grid_z is required when cube is None")
+        grid = np.asarray(grid_z, float)
+        covered = np.ones(grid.size, bool)
+        n_c = 0
     chi2 = np.full(grid.size, np.nan)
     coefficients = [None] * grid.size
     columns_at = [None] * grid.size
     edge = edge_margin_pixels * float(projected.bin_width)
-    n_c = cube.n_templates
     mult = polynomial_columns(projected.wavelength, multiplicative_degree, reference=spectrum.wavelength)[:, 1:] if multiplicative_degree > 0 else None
     for i in np.flatnonzero(covered):
         z = float(grid[i])
-        cont = cube.columns[i][keep] * weight[:, None]
+        cont = deproject(cube.columns[i][keep] * weight[:, None]) if cube is not None else np.zeros((weight.size, 0))
         line_cols, names = [], []
         for t in lines:
             col, n_used = line_template_column(projected, t, z, narrow_sigma_kms, edge_margin=edge)
             if col is not None and n_used > 0 and np.any(col > 0):
-                line_cols.append(col * weight)
+                line_cols.append(deproject(col * weight))
                 names.append(t.name)
         design = np.concatenate([cont, np.column_stack(line_cols) if line_cols else np.zeros((weight.size, 0)), poly], axis=1)
+        if design.shape[1] == 0:
+            chi2[i] = float(data_w @ data_w); coefficients[i] = np.zeros(0); columns_at[i] = ([], [])
+            continue
         scale = np.sqrt(np.mean(design**2, axis=0))
         scale = np.where(scale > 0, scale, 1.0)
         design = design / scale
@@ -153,23 +186,29 @@ def joint_scan(
         columns_at[i] = (names, line_cols)
     if not np.isfinite(chi2).any():
         return None
-    # null: polynomial only
-    c0, *_ = np.linalg.lstsq(poly, data_w, rcond=None) if poly.shape[1] else (np.zeros(0),)
-    resid0 = data_w - (poly @ c0 if poly.shape[1] else 0.0)
+    # null: nuisance only
+    if poly.shape[1]:
+        c0, *_ = np.linalg.lstsq(poly, data_w, rcond=None)
+        resid0 = data_w - poly @ c0
+    else:
+        resid0 = data_w
     chi2_null = float(resid0 @ resid0)
     best, delta_runner, z_runner = _best_and_runner(grid, chi2, separation_kms)
     names, line_cols = columns_at[best]
     coef = coefficients[best]
     # continuum-only refit at the best redshift -> evidence added by the lines
-    cont = cube.columns[best][keep] * weight[:, None]
+    cont = deproject(cube.columns[best][keep] * weight[:, None]) if cube is not None else np.zeros((weight.size, 0))
     design_c = np.concatenate([cont, poly], axis=1)
-    scale_c = np.sqrt(np.mean(design_c**2, axis=0)); scale_c = np.where(scale_c > 0, scale_c, 1.0)
-    if nonnegative:
-        _, chi2_cont = _solve(design_c / scale_c, data_w, 0, n_c)
+    if design_c.shape[1] == 0:
+        chi2_cont = chi2_null
     else:
-        cc, *_ = np.linalg.lstsq(design_c / scale_c, data_w, rcond=None)
-        r = data_w - (design_c / scale_c) @ cc
-        chi2_cont = float(r @ r)
+        scale_c = np.sqrt(np.mean(design_c**2, axis=0)); scale_c = np.where(scale_c > 0, scale_c, 1.0)
+        if nonnegative:
+            _, chi2_cont = _solve(design_c / scale_c, data_w, 0, n_c)
+        else:
+            cc, *_ = np.linalg.lstsq(design_c / scale_c, data_w, rcond=None)
+            r = data_w - (design_c / scale_c) @ cc
+            chi2_cont = float(r @ r)
     # formal line errors from the joint design's normal matrix
     amplitudes, snr = {}, {}
     if line_cols:
@@ -185,8 +224,9 @@ def joint_scan(
             pass
     result = JointScanResult(
         z=float(grid[best]), chi2=float(chi2[best]), chi2_null=chi2_null, delta_chi2_runner_up=delta_runner,
-        z_runner_up=z_runner, n_pixels=int(keep.sum()), n_parameters=n_c + len(line_cols) + poly.shape[1],
-        kind=cube.kind, grid_z=grid, grid_chi2=chi2, coefficients=coef,
+        z_runner_up=z_runner, n_pixels=int(keep.sum()),
+        n_parameters=n_c + len(line_cols) + poly.shape[1] + (basis.shape[1] if basis is not None else 0),
+        kind=cube.kind if cube is not None else "LINES", grid_z=grid, grid_chi2=chi2, coefficients=coef,
         delta_chi2_lines=float(chi2_cont - chi2[best]), line_amplitudes=amplitudes, line_snr=snr,
         n_line_templates=len(lines),
     )

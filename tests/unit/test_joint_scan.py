@@ -85,3 +85,16 @@ def test_joint_multiplicative_mode_recovers_redshift(cube):
     mult = joint_scan(tilted, projected, cube, poly_degree=0, multiplicative_degree=2)
     assert abs(mult.z - z) < 0.004
     assert mult.chi2 < plain.chi2
+
+
+def test_lines_only_and_spline_deprojected_modes(cube):
+    z = 1.2
+    spectrum = observe(z, line_flux=1.2e-15, snr=8.0)
+    projected = prepare(spectrum, ScreenSettings(n_knots=12, outlier_threshold=0.0))
+    lines_only = joint_scan(spectrum, projected, None, grid_z=cube.grid_z, spline_nuisance=True)
+    assert lines_only.kind == "LINES" and abs(lines_only.z - z) < 0.004
+    assert lines_only.chi2_null == pytest.approx(projected.chi2_continuum, rel=1e-9)
+    assert lines_only.delta_chi2_lines > 50
+    with_cont = joint_scan(spectrum, projected, cube, spline_nuisance=True)
+    assert abs(with_cont.z - z) < 0.004
+    assert with_cont.chi2 <= lines_only.chi2 + 1e-6  # extra (deprojected) columns cannot hurt at the same z
