@@ -1252,3 +1252,55 @@ algorithm transfers; the templates do not.
 4. validate on the 218 Hα-window and 500 low-z DESI sets — numbers to beat
    64 % (coherent Hα sample) and 16 % (Euclid SPE at low z);
 5. broad-line truth set (DESI QSOs) for the QSO class.
+
+### First continuum-only redshift scan on real data (step 2/3, GALAXY core)
+
+`fit/continuum_redshift.py`: χ² of (5 XSL PCA components + mean + linear
+polynomial) at every z on a 300 km/s grid, 0 ≤ z ≤ 1; reliability = Δχ² to the
+best minimum more than 3000 km/s away (Redrock's statistic).  Basis: 108 SSPs
+with log t ≥ 8.5, [M/H] ≥ −0.5, telluric gaps bridged; explained variance
+[0.970 0.015 0.008 0.003 0.001].  Run on the 489 unique low-z DESI galaxies
+(`outputs/continuum_redshift_lowz.parquet`, 17.1 min, 2 s/object):
+
+| | agreement within 1000 km/s |
+|---|---:|
+| all 489 | **30.3 %** (Euclid SPE: 16 %) |
+| S/N > 50 / 20–50 / 10–20 per pixel | 59 % / 17 % / 4 % |
+| z < 0.15 / 0.15–0.3 / 0.3–0.45 / 0.45–0.9 (n=9) | 54 % / 17 % / 18 % / 0 % |
+| purity at Δχ²_runner-up > 10 / 25 / 50 / 100 | 36 / 40 / 46 / 51 % (retained 92 / 78 / 64 / 48 %) |
+
+Median reduced χ² 2.16 (archive variance; the known η² ≈ 2 noise inflation).
+Failures scatter (median |Δz| 0.15, only 6 % at the z = 0 grid edge): the
+basis is confusing real features, not sliding off the grid.  Purity rising
+monotonically with Δχ² is the property the emission-line scan lacked.
+`plots/continuum_redshift_lowz.png`.
+
+Two diagnoses (verified):
+- The XSL flux inside the telluric gaps is unusable (spikes to ±40× the
+  continuum, `plots/xsl_ssp_telluric_gaps.png`), so the bridge is a stiff cubic
+  across rest 1.35–1.425 µm — which at z = 0.15–0.3 covers the reddest,
+  highest-weight quarter of the Euclid window.  Together with the intrinsically
+  feature-poor rest 0.9–1.5 µm window this is the likely cause of the weak
+  0.15–0.3 bin.
+- The bright low-z galaxies are extended: their `LSF_SIG` is 24–120 Å rather
+  than the 13.7 Å point-source median, so the templates must be smoothed
+  per object — the LSF is part of the model, not a constant.
+
+### Speed: precomputed template cube (`fit/template_cube.py`)
+
+Every Q1 combined spectrum is on the same grid (531 pixels, 11900–19002 Å,
+13.4 Å; checked on 6 tiles), so the redshifted, LSF-smoothed, pixel-integrated
+templates are computed once per (template set, LSF bucket of 5 Å) as a
+(n_z, 531, n_templates) cube and every object reduces to a batched
+pseudo-inverse over its kept pixels.  Smoothing is done once per (template,
+LSF) in ln λ — the LSF width in ln λ is redshift-independent — and each z is
+two interpolations of the cumulative integral.  `Template.bridged()` is
+memoised.  Cube build 0.3 s (6 templates) to 1.3 s (18); per-object scan of
+694 redshifts ≈ 10 ms.  Checked against the direct scan: χ² agrees to
+1×10⁻⁵ relative (`tests/unit/test_template_cube.py`).  Nonnegative
+(archetype/NNLS) mode and the PHZ mixture prior are options of the same scan.
+`validation/continuum_experiments.py` runs named variants on the low-z sample
+and is the reproducible form of what was previously an inline script.
+
+Pilot on 60 objects: PCA-5 + linear 38 %, archetypes (18 SSPs, NNLS) 52 %.
+Full 8-variant sweep on 489 objects running.

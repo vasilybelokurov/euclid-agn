@@ -43,6 +43,8 @@ class ContinuumScanResult:
     grid_z: np.ndarray
     grid_chi2: np.ndarray
     coefficients: np.ndarray
+    z_prior: float = float("nan")  # best redshift after the photo-z prior penalty, if one was given
+    delta_chi2_runner_up_prior: float = float("nan")
 
     @property
     def delta_chi2_null(self) -> float:
@@ -52,7 +54,8 @@ class ContinuumScanResult:
     def as_row(self) -> dict:
         return {"cz_z": self.z, "cz_chi2": self.chi2, "cz_delta_chi2_null": self.delta_chi2_null,
                 "cz_delta_chi2_runner_up": self.delta_chi2_runner_up, "cz_z_runner_up": self.z_runner_up,
-                "cz_kind": self.kind, "cz_n_pixels": self.n_pixels}
+                "cz_kind": self.kind, "cz_n_pixels": self.n_pixels, "cz_n_parameters": self.n_parameters,
+                "cz_z_prior": self.z_prior, "cz_delta_chi2_runner_up_prior": self.delta_chi2_runner_up_prior}
 
 
 def redshift_grid(z_min: float, z_max: float, step_kms: float) -> np.ndarray:

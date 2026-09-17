@@ -30,6 +30,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass, field
+from functools import cached_property
 from functools import lru_cache
 from pathlib import Path
 
@@ -61,6 +62,11 @@ class Template:
     metadata: dict = field(default_factory=dict)
 
     def bridged(self) -> Template:
+        """Replace masked stretches by a smooth low-order interpolation (memoised)."""
+        return self._bridged
+
+    @cached_property
+    def _bridged(self) -> Template:
         """Replace masked stretches by a smooth low-order interpolation.
 
         A cubic in log-wavelength through the clean pixels within a window of
@@ -146,7 +152,54 @@ def load_glikman_composite(path: str | Path = DEFAULT_ROOT / "qso" / "table7.dat
 # --- projection onto a Euclid spectrum -------------------------------------------
 
 
+_SMOOTHED: dict[tuple[int, float], tuple[np.ndarray, np.ndarray]] = {}
+
+
+def smoothed_cumulative(template: Template, sigma_log: float) -> tuple[np.ndarray, np.ndarray]:
+    """Rest-frame template smoothed by ``sigma_log`` (Gaussian in ln-wavelength) and its cumulative integral.
+
+    The observed-frame LSF is a fixed width in ln-wavelength for a given object
+    (``lsf_sigma / lambda_ref``), so this depends on the object's LSF but not on
+    the trial redshift: computed once per (template, LSF) and memoised, it makes
+    a redshift scan a sequence of interpolations.
+    """
+    key = (id(template), round(float(sigma_log), 7))
+    hit = _SMOOTHED.get(key)
+    if hit is not None:
+        return hit
+    flux = template.bridged().flux if not template.mask.all() else template.flux
+    dlog = np.median(np.diff(np.log(template.wavelength)))
+    smoothed = gaussian_filter1d(flux, max(sigma_log / dlog, 0.5), mode="nearest")
+    # cumulative integral in the *rest* frame; redshifting multiplies it by (1+z)
+    cumulative = np.concatenate([[0.0], np.cumsum(0.5 * (smoothed[1:] + smoothed[:-1]) * np.diff(template.wavelength))])
+    if len(_SMOOTHED) > 512:
+        _SMOOTHED.clear()
+    _SMOOTHED[key] = (template.wavelength, cumulative)
+    return _SMOOTHED[key]
+
+
 @blas_safe
+def project_template_on_edges(template: Template, edges: np.ndarray, lsf_sigma: float, z: float,
+                              extra_sigma_kms: float = 0.0) -> np.ndarray | None:
+    """Redshifted, LSF-smoothed template integrated across arbitrary pixel edges.
+
+    ``edges`` is ``(n_pixels, 2)`` in observed Angstrom.  Returns the mean flux
+    density per pixel (template units), or ``None`` if the template does not
+    cover ``edges`` at this redshift.  Shared by :func:`project_template` (one
+    object's kept pixels) and the precomputed cube of
+    :mod:`euclid_agn.fit.template_cube` (the common archive grid).
+    """
+    lo, hi = edges[:, 0].min(), edges[:, 1].max()
+    scale = 1.0 + z
+    if template.wavelength[0] * scale > lo or template.wavelength[-1] * scale < hi:
+        return None
+    sigma_log = np.sqrt((lsf_sigma / (0.5 * (lo + hi))) ** 2 + (extra_sigma_kms / C_KMS) ** 2)
+    rest_wavelength, cumulative = smoothed_cumulative(template, sigma_log)
+    lower = np.interp(edges[:, 0] / scale, rest_wavelength, cumulative)
+    upper = np.interp(edges[:, 1] / scale, rest_wavelength, cumulative)
+    return scale * (upper - lower) / (edges[:, 1] - edges[:, 0])
+
+
 def project_template(template: Template, projected, z: float, extra_sigma_kms: float = 0.0) -> np.ndarray | None:
     """Template at redshift ``z`` on the spectrum's kept pixels.
 
@@ -158,20 +211,9 @@ def project_template(template: Template, projected, z: float, extra_sigma_kms: f
     components are mean-centred, so a mean normalisation would divide by zero)
     so fitted coefficients are comparable flux scales.
     """
-    observed = template.wavelength * (1.0 + z)
-    lo, hi = projected.edges[:, 0].min(), projected.edges[:, 1].max()
-    if observed[0] > lo or observed[-1] < hi:
+    column = project_template_on_edges(template, projected.edges, projected.lsf_sigma, z, extra_sigma_kms)
+    if column is None:
         return None
-    flux = template.bridged().flux if not template.mask.all() else template.flux
-    # smooth to the LSF (plus any intrinsic broadening) in the observed frame
-    dlog = np.median(np.diff(np.log(observed)))
-    sigma_log = np.sqrt((projected.lsf_sigma / np.median(projected.wavelength)) ** 2 + (extra_sigma_kms / C_KMS) ** 2)
-    smoothed = gaussian_filter1d(flux, max(sigma_log / dlog, 0.5), mode="nearest")
-    # integrate across kept pixel edges via the cumulative integral
-    cumulative = np.concatenate([[0.0], np.cumsum(0.5 * (smoothed[1:] + smoothed[:-1]) * np.diff(observed))])
-    lower = np.interp(projected.edges[:, 0], observed, cumulative)
-    upper = np.interp(projected.edges[:, 1], observed, cumulative)
-    column = (upper - lower) / projected.widths
     scale = float(np.sqrt(np.mean(column**2)))
     return column / scale if np.isfinite(scale) and scale > 0 else None
 
