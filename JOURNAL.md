@@ -1873,3 +1873,14 @@ Stars: SPE publishes no velocities; star-class spectra with S/N ≥ 20
 (σ_v ≲ 100 km/s): **112,000**; S/N ≥ 10: 179,000; all: 462,000.
 Not counted: the 1.08 M spectra without any SPE solution, and the S/N 5–10
 galaxies (385,000) where neither pipeline is validated.
+
+Cross-check by a second route (`validation/q1_yield.py`: the 17,306 cached
+spectra classified by MER into extended/point sources per H bin, scaled ×249
+to Q1, times the H-binned DESI rates): extended-source gain ~14,000 (H 15–19),
+i.e. 5× below the S/N-census figure.  The cached tiles are not a fair sample
+of Q1 (chosen for DESI overlap; only ~4,000 Q1-scaled extended sources at
+H 16–17, and `point_like_prob < 0.1` drops compact galaxies), so the census
+route — population-complete over 3.2 M spectra — is the one to quote, with
+the cached-scaling result as the lower bound.  Stars agree between routes:
+~107,000 point sources with H < 17 (cached scaling) vs 112,000 star-class
+spectra with S/N ≥ 20 (census).
