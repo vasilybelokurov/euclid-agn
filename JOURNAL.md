@@ -1523,3 +1523,22 @@ multiplicative cubic, dither-scatter variance.
 PCA-2 / PCA-3 + linear + lines: 5.0 / 3.2 %; 6 / 3 archetypes NNLS + lines:
 15.1 / 13.8 %.  Continuum freedom is not why the joint fit trails the
 line-only scan (35.8 %); investigating the prior and the line model itself.
+
+### Joint scan on the Hα sample with the PHZ prior (`outputs/continuum_variants_halpha_prior.parquet`)
+
+| variant | data only | with prior |
+|---|---:|---:|
+| line-only matched-filter scan (session 10, prior) | | 37.6 % |
+| joint, 18 archetypes + cubic | 12.4 % | 17.4 % |
+| joint, 6 archetypes + linear | 15.1 % | 18.3 % |
+| joint, PCA-2 + linear | 5.0 % | 6.4 % |
+
+The prior (available for 99 % of the sample via `phz_mode_1`) closes only a
+fifth of the gap.  Remaining structural difference: the line-only scan
+projects out one z-independent spline continuum, so its χ²(z) varies only
+through the lines; the joint fit refits the continuum at every trial z and,
+at S/N ≈ 3 per pixel, that refit's χ² fluctuates by about the number of
+continuum parameters — comparable to a faint ELG's Hα Δχ² (30–60).  Testing
+with a single continuum template; if confirmed, the design becomes
+S/N-adaptive: z-independent nuisance continuum + lines for faint spectra,
+archetype continuum + lines for bright ones, chosen per object by evidence.

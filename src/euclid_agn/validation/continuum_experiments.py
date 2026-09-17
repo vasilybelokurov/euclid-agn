@@ -269,6 +269,9 @@ DEFAULT_VARIANTS = [
     Variant("arch6_nnls_p1_joint", basis="archetypes", nonnegative=True, archetype_step=18, poly_degree=1, joint=True),
     Variant("arch3_nnls_p1_joint", basis="archetypes", nonnegative=True, archetype_step=36, poly_degree=1, joint=True),
     Variant("arch_nnls_m3_rescale_joint", basis="archetypes", nonnegative=True, archetype_step=6, poly_degree=0, multiplicative_degree=3, variance_rescale=True, joint=True),
+    # one continuum template: isolates the z-dependent continuum-fit noise hypothesis for faint ELGs
+    Variant("arch1_nnls_p1_joint", basis="archetypes", nonnegative=True, archetype_step=108, poly_degree=1, joint=True),
+    Variant("arch1_nnls_p3_joint", basis="archetypes", nonnegative=True, archetype_step=108, poly_degree=3, joint=True),
 ]
 
 
