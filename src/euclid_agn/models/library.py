@@ -154,8 +154,9 @@ def project_template(template: Template, projected, z: float, extra_sigma_kms: f
     template's own resolution is far higher than R ~ 450 and is ignored), and
     integrated across each kept pixel's true edges - the same treatment the line
     models receive.  Returns ``None`` if the template does not cover the kept
-    range at this redshift.  Normalised to unit mean over the kept pixels so
-    the fitted coefficient is a flux scale.
+    range at this redshift.  Normalised to unit RMS over the kept pixels (PCA
+    components are mean-centred, so a mean normalisation would divide by zero)
+    so fitted coefficients are comparable flux scales.
     """
     observed = template.wavelength * (1.0 + z)
     lo, hi = projected.edges[:, 0].min(), projected.edges[:, 1].max()
@@ -171,8 +172,8 @@ def project_template(template: Template, projected, z: float, extra_sigma_kms: f
     lower = np.interp(projected.edges[:, 0], observed, cumulative)
     upper = np.interp(projected.edges[:, 1], observed, cumulative)
     column = (upper - lower) / projected.widths
-    scale = np.mean(column)
-    return column / scale if scale > 0 else None
+    scale = float(np.sqrt(np.mean(column**2)))
+    return column / scale if np.isfinite(scale) and scale > 0 else None
 
 
 # --- low-dimensional continuum basis --------------------------------------------
@@ -202,13 +203,15 @@ class ContinuumBasis:
         return out
 
 
-def build_pca_basis(templates: list[Template], n_components: int = 5, wmin: float = 8000.0,
+def build_pca_basis(templates: list[Template], n_components: int = 5, wmin: float = 6000.0,
                     wmax: float = 19000.0, dlog: float = 1e-4) -> ContinuumBasis:
     """PCA of bridged templates on a common log grid, normalised to unit mean.
 
-    ``wmin``-``wmax`` (rest Angstrom) is the range Euclid can ever see for the
-    class; restricting the PCA to it keeps the components describing H-band
-    variety, not optical variety.
+    ``wmin``-``wmax`` (rest Angstrom) is the range Euclid can see for the class
+    over the redshifts scanned: 12500/(1+1.0) = 6250 A at the blue end for
+    z <= 1, 18500 A at the red end for z = 0.  Restricting the PCA to it keeps
+    the components describing what the grism sees.  (First version used 8000 A
+    and silently returned None for every z > 0.56.)
     """
     grid = np.exp(np.arange(np.log(wmin), np.log(wmax), dlog))
     rows = []

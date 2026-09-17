@@ -48,12 +48,12 @@ def host():
     return Spectrum1D(wavelength=w, flux=f, variance=v, mask=m, quality=q, lsf_sigma=15.0, bin_width=13.4)
 
 
-def test_projection_is_lsf_smoothed_pixel_integrated_and_unit_mean():
+def test_projection_is_lsf_smoothed_pixel_integrated_and_unit_rms():
     t = synthetic_template(gap=False)
     projected = prepare(host(), ScreenSettings())
     column = project_template(t, projected, 0.3)
     assert column is not None and column.shape == projected.wavelength.shape
-    assert np.mean(column) == pytest.approx(1.0)
+    assert np.sqrt(np.mean(column**2)) == pytest.approx(1.0)
     # the sine wiggle (period 800 A rest ~ 1040 A observed) survives smoothing by a 15 A LSF
     assert np.std(column) > 0.05
     # out of coverage -> None
