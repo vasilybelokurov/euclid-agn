@@ -51,20 +51,32 @@ def fetch_bp_rp(gaia_ids) -> pd.DataFrame:
     return g
 
 
+DITHER_ZERO_POINT_FLOOR_KMS = 110.0 / 2.0  # per-dither wavelength zero-point scatter 110 km/s rms, averaged over 4 dithers
+
+
 def curves(t: pd.DataFrame, mag: str, edges) -> pd.DataFrame:
+    """Per-magnitude-bin precision estimators from the combined-spectrum fits.
+
+    ``formal_error``: rvspecfit's error on the combined spectrum (median);
+    ``sigma_from_v``: 1.4826 x median |v| - an *upper* bound on the measurement
+    error because it includes the stars' true velocity dispersion (a few tens
+    of km/s for disk dwarfs at these latitudes); ``floor``: the wavelength
+    zero-point systematic measured from dither cross-correlation.  The
+    per-dither fits themselves are unusable (their wavelength solutions
+    disagree by 0.4 pixel) and are not used.
+    """
     rows = []
-    ok = t[(t.n_dither_fits >= 2) & t[mag].notna()]
+    ok = t[t[mag].notna() & t.comb_vel.notna()]
     for lo, hi in zip(edges[:-1], edges[1:]):
         s = ok[(ok[mag] >= lo) & (ok[mag] < hi)]
-        if len(s) < 4:
+        if len(s) < 8:
             continue
-        single = s.dither_vel_std.median()
         rows.append({"mag": mag, "lo": lo, "hi": hi, "centre": 0.5 * (lo + hi), "n": len(s),
-                     "single_dither_sigma": single, "single_dither_sigma_lo": s.dither_vel_std.quantile(0.25),
-                     "single_dither_sigma_hi": s.dither_vel_std.quantile(0.75),
-                     "combined_sigma_est": (s.dither_vel_std / np.sqrt(s.n_dither_fits)).median(),
-                     "formal_error_combined": s.comb_vel_err.median(),
-                     "abs_v_median": s.comb_vel.abs().median()})
+                     "formal_error": s.comb_vel_err.median(),
+                     "formal_error_lo": s.comb_vel_err.quantile(0.25), "formal_error_hi": s.comb_vel_err.quantile(0.75),
+                     "sigma_from_v": 1.4826 * s.comb_vel.abs().median(),
+                     "frac_within_300": (s.comb_vel.abs() < 300).mean(),
+                     "floor": DITHER_ZERO_POINT_FLOOR_KMS})
     return pd.DataFrame(rows)
 
 
@@ -74,18 +86,19 @@ def plot(cv: dict, path: Path) -> None:
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    fig, axes = plt.subplots(1, len(cv), figsize=(5.2 * len(cv), 4.4), sharey=True)
+    fig, axes = plt.subplots(1, len(cv), figsize=(5.4 * len(cv), 4.6), sharey=True)
     axes = np.atleast_1d(axes)
     for ax, (mag, c) in zip(axes, cv.items()):
-        ax.fill_between(c.centre, c.single_dither_sigma_lo, c.single_dither_sigma_hi, color="tab:blue", alpha=0.15)
-        ax.plot(c.centre, c.single_dither_sigma, "o-", color="tab:blue", label="single dither: dither-to-dither scatter")
-        ax.plot(c.centre, c.combined_sigma_est, "s-", color="crimson", label="combined (4 dithers): scatter/√n")
-        ax.plot(c.centre, c.formal_error_combined, "^--", color="0.4", label="combined: rvspecfit formal error")
+        ax.fill_between(c.centre, c.formal_error_lo, c.formal_error_hi, color="crimson", alpha=0.15)
+        ax.plot(c.centre, c.formal_error, "o-", color="crimson", label="rvspecfit formal error, combined spectrum (median, IQR)")
+        ax.plot(c.centre, c.sigma_from_v, "s--", color="tab:blue", label="1.48 × median |v|  (upper bound: includes true σ_v of the stars)")
+        ax.axhline(c.floor.iloc[0], color="0.4", ls=":", label="wavelength zero-point floor (dither scatter 110 km/s / 2)")
+        ax.axhline(259.0, color="0.7", ls="-.", lw=0.8, label="1 NISP pixel at 1.55 µm")
         for x, n in zip(c.centre, c.n):
-            ax.text(x, 1.05 * c.single_dither_sigma_hi.max(), f"{n}", ha="center", fontsize=7)
-        ax.set_yscale("log"); ax.set_xlabel(f"{mag} [mag]"); ax.grid(alpha=0.3)
-        ax.set_title(f"NISP red grism stellar RV precision vs {mag}", fontsize=9)
-    axes[0].set_ylabel("σ(v) [km/s]"); axes[0].legend(fontsize=7, loc="upper left")
+            ax.text(x, 1.08 * c.sigma_from_v.max(), f"{n}", ha="center", fontsize=7)
+        ax.set_yscale("log"); ax.set_ylim(20, 800); ax.set_xlabel(f"{mag.replace('_mag', '')} [mag]"); ax.grid(alpha=0.3, which="both")
+        ax.set_title(f"Euclid NISP red grism: stellar RV precision vs {mag.replace('_mag', '')}", fontsize=9)
+    axes[0].set_ylabel("σ(v) [km/s]"); axes[0].legend(fontsize=6.5, loc="upper left")
     fig.tight_layout(); fig.savefig(path, dpi=140); plt.close(fig)
 
 
@@ -123,7 +136,7 @@ def main(argv=None) -> None:
     cv = {m: c for m, c in cv.items() if len(c)}
     pd.set_option("display.width", 200)
     for m, c in cv.items():
-        print(f"--- {m}"); print(c[["lo", "hi", "n", "single_dither_sigma", "combined_sigma_est", "formal_error_combined", "abs_v_median"]].round(0).to_string(index=False))
+        print(f"--- {m}"); print(c[["lo", "hi", "n", "formal_error", "sigma_from_v", "frac_within_300"]].round(2).to_string(index=False))
     plot(cv, args.plot); print("wrote", args.plot)
     print(f"BP-RP median {t.bp_rp.median():.2f}; G-V median {(t.G - t.V).median():.2f}; V-H median {(t.V - t.H_mag).median():.2f}")
 

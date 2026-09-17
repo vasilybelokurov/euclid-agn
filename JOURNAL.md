@@ -1749,3 +1749,52 @@ continuum-only scan, whereas the GALAXY class in production will use the
 adaptive engine (lines + spline at this S/N) — the class comparison must be
 made on a common nuisance model, which is the open design question for the
 production classifier.
+
+### Stellar line-of-sight velocities: how faint? (`validation/star_velocity_experiment.py`, `dither_wavelength_offsets.py`, `star_velocity_plot.py`)
+
+3,582 Gaia-matched point sources (H < 19, point-like > 0.99), rvspecfit on the
+combined spectrum and on each dither (2,550 s).  Gaia G from the ESA archive;
+V = G − (G−V)(BP−RP) with the Gaia DR3 Table 5.9 relation (verified).  The
+sample is K/M dwarfs: BP−RP median 1.80, G−V = −0.62, V−H = 1.80.
+
+**Per-dither fits are unusable** — velocities scatter over the full ±1500
+km/s range at every magnitude, Teff swings 2,900–8,600 K on the same star,
+reduced χ² 10–120 at S/N 65 per pixel.  Cause measured by template-free
+cross-correlation of each dither against the combined spectrum (223 stars,
+H < 17, 899 dither spectra with formal error < 200 km/s): **the dithers'
+wavelength zero points scatter by 110 km/s rms (0.42 NISP pixel) within a
+star**, formal error 5 km/s, no pointing- or detector-level pattern (medians
+within ±30 km/s).  The combined spectrum averages four such offsets → a
+zero-point floor of ~55 km/s, and its LSF is slightly broadened by the
+mis-registration.  (Re-registering dithers before stacking is a concrete
+improvement for stars and for the M5 dither-level line fit.)
+
+**Precision of the combined-spectrum velocity** (`plots/star_rv_precision.png`,
+`outputs/star_velocity_mags.parquet`):
+
+| bin | n | rvspecfit formal σ_v | 1.48 × median |v| (upper bound) | |v| < 300 km/s |
+|---|---:|---:|---:|---:|
+| H 16–17 | 242 | 40 km/s | 70 | 94 % |
+| H 17–18 | 1333 | 74 | 109 | 87 % |
+| H 18–19 | 1943 | 168 | 236 | 65 % |
+| G 17–18 | 407 | 81 | 150 | 83 % |
+| G 18–19 | 1327 | 88 | 130 | 78 % |
+| G 19–20 | 1311 | 121 | 161 | 76 % |
+| G 20–21 | 474 | 224 | 307 | 58 % |
+| V 18–19 | 905 | 97 | 155 | 76 % |
+| V 19–20 | 983 | 87 | 125 | 81 % |
+| V 20–21 | 1233 | 129 | 169 | 73 % |
+| V 21–22 | 243 | 186 | 296 | 59 % |
+
+The upper bound includes the stars' true dispersion (tens of km/s), so the
+truth lies between the two columns.  The H sequence is the physical one: the
+grism sees NIR flux, and at fixed V a redder (cooler) star is brighter in H
+and has stronger H₂O/CO features — hence the non-monotonic V curve (V 17–18
+is worse than V 19–20 because those are the hotter, feature-poor stars).  No
+stars brighter than H ≈ 16 have Q1 spectra in the cached tiles.
+
+Answer: ~50–80 km/s per star for H ≲ 17 (G ≲ 18.5, V ≲ 20 for K/M dwarfs),
+~100–150 km/s at G 19–20 / V 20–21, and 200–300 km/s (a pixel) at G 20–21 /
+V 21–22, where 40 % of fits are already off by > 300 km/s.  Below that the
+velocity is not measured.  The zero-point floor (~55 km/s) and 0.4-px dither
+mis-registration are the systematics to fix before the bright end can improve.
