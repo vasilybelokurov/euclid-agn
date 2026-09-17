@@ -1405,3 +1405,29 @@ called Pa-β at z = 0.126: a single line at 14442 Å *is* both); a line-free
 z = 0.1 continuum gets its redshift with `delta_chi2_lines` < 15.
 Cost ≈ 0.7 s per object (line columns rebuilt per z; vectorise later).
 Running on the 489 low-z galaxies now.
+
+### Sweep 3: coherence mask and systematic floor (489 objects, |Δz|/(1+z) < 0.01)
+
+| variant | agree | +prior | reduced χ² | purity Δχ²>100 (kept) |
+|---|---:|---:|---:|---:|
+| archetypes + linear | 40.5 % | 41.3 | 2.68 | 59 % (34 %) |
+| + coherence mask (5× median, floor 8) | 40.3 % | 41.5 | 2.43 | 60 % (31 %) |
+| + coherence mask, 3× median | 40.3 % | 41.5 | 2.43 | (identical: the floor of 8 binds) |
+| archetypes + **cubic** + coherence | **43.4 %** | **45.4** | 2.08 | 65 % (26 %) |
+| + 2 % / 5 % systematic floor | 40.1 / 39.9 % | | 1.56 / 0.62 | 19 % (12 %) / 0 % (4 %) |
+| coherence + 3 % floor | 39.7 % | | 1.01 | 0 % (6 %) |
+| feature-only + coherence | 28.6 % | 34.2 | 1.69 | 67 % (10 %) |
+
+- The dither-coherence mask does not change which redshift wins; it makes the
+  fit honest (reduced χ² down 10 %) and is kept as hygiene.  It removes a
+  median 58 pixels per object — more than contamination alone; breakdown
+  checked below.
+- A systematic flux-error floor leaves accuracy unchanged and *removes* the
+  reliability information: with 3–5 % floors the Δχ² gaps shrink until
+  purity no longer rises with the margin.  Rejected.  Reliability thresholds
+  will be set with the measured noise inflation η² instead.
+- Cubic nuisance is the only material gain in sweeps 1–3 (+3–4 points).
+
+Adopted configuration for the GALAXY class: 18 XSL archetypes (log t ≥ 8.5,
+[M/H] ≥ −0.5), NNLS, cubic additive nuisance, coherence mask, PHZ prior
+reported alongside the data-only answer.
