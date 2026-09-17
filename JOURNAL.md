@@ -1584,3 +1584,29 @@ decision: the GALAXY class runs *two* models — (A) lines + spline nuisance;
 and picks per object by evidence (BIC on the same pixels), with the
 continuum S/N as the expected discriminant (Hα sample median S/N 2.7; low-z
 sample 16–160).
+
+### Star truth set (`validation/star_truth.py`, `outputs/star_truth.parquet`)
+
+MER Gaia-matched sources with point_like_prob > 0.9 in the 33 cached tiles
+that have a NISP spectrum: 8,275 (IRSA times out on multi-tile IN lists —
+one tile per query).  H (2″ aperture) quantiles 17.3 / 18.75 / 20.2.  SPE's
+own classification of the same objects: 3,015 star, 4,290 galaxy, 308 QSO,
+662 unclassified — at H ≳ 18.5 a Gaia match is not a clean star label, so
+the STAR-class test will use H < 17.5 with good `gaia_match_quality`.
+
+### Adaptive GALAXY engine, first two runs (`fit/galaxy_engine.py`)
+
+Hα sample (218, z 0.9–1.8): the lines + spline model on the dither-scatter-
+rescaled variance gives **48.2 %** with the prior (22.0 % data only) — up
+from 39.9 % on the archive variance and 37.6 % for the session-10 matched
+filter.  The rescaled variance down-weights the incoherent pixels that
+produce spurious line detections.
+
+Low-z sample (489): the BIC rule failed — it chose the spline model for 480
+of 489 objects (a 12-knot spline always fits a bright continuum better than
+18 archetypes × cubic, and BIC's k ln n penalty is small), collapsing the
+agreement to 6 % against 41.5 % for the continuum model on the same run.
+Absolute fit quality carries no redshift information.  Replaced by a
+*redshift-evidence* rule: compare the two curves' best-minus-runner-up
+margins on the same variance, with S/N guards (S/N < 5 → lines; S/N > 20 →
+continuum).  Re-running both samples.

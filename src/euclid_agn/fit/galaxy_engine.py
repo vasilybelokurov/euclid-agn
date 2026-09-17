@@ -18,11 +18,16 @@ So the class runs both:
   B. ``archetypes + lines`` - :func:`joint_scan` with the archetype cube,
      multiplicative cubic, dither-scatter-rescaled variance;
 
-and picks per object by the Bayesian information criterion on the same
-pixels, BIC = chi2 + k ln n, with both chi2 on the *same* variance (model B's
-rescaled variance is applied to both, so the comparison is fair).  The
-non-chosen model's redshift is kept: agreement between the two is itself a
-quality signal (``zwarn`` bit ``MODELS_DISAGREE``).
+and picks per object by *redshift evidence*: the model whose chi2(z) curve
+has the larger best-minus-runner-up margin (on the same, dither-scatter-
+rescaled variance) wins, with the continuum S/N as a guard at both ends
+(below ``snr_switch`` the lines model is used; above ``snr_continuum`` the
+continuum model).  Absolute fit quality (chi2 or BIC) must *not* be used: a
+12-knot spline always fits a bright continuum better than physical
+templates, yet that chi2 carries no redshift information - VERIFIED: a BIC
+rule chose the spline model for 480 of 489 bright low-z galaxies and
+collapsed the agreement with DESI from 46 % to 6 %.  Both models' redshifts
+are kept; their agreement is a quality signal (``MODELS_DISAGREE``).
 """
 
 from __future__ import annotations
@@ -73,8 +78,8 @@ class GalaxyEngine:
     """Run models A and B and choose."""
 
     def __init__(self, store: CubeStore, n_knots: int = 12, multiplicative_degree: int = 3,
-                 min_continuum_snr: float = 0.0, snr_switch: float = 5.0, separation_kms: float = 3000.0,
-                 agreement_kms: float = 3000.0):
+                 min_continuum_snr: float = 0.0, snr_switch: float = 5.0, snr_continuum: float = 20.0,
+                 separation_kms: float = 3000.0, agreement_kms: float = 3000.0):
         self.store = store
         self.n_knots = n_knots
         self.multiplicative_degree = multiplicative_degree
@@ -83,6 +88,7 @@ class GalaxyEngine:
         # measured on DESI truth, continuum templates only hurt at S/N ~ 3 (Halpha sample) and BIC
         # cannot see template inadequacy when both models reach the noise floor
         self.snr_switch = snr_switch
+        self.snr_continuum = snr_continuum  # above this, the continuum model is used regardless of margins
         self.separation_kms = separation_kms
         self.agreement_kms = agreement_kms
 
@@ -108,10 +114,13 @@ class GalaxyEngine:
             return None
         bic_a = bic(a) if a is not None else np.inf
         bic_b = bic(b) if b is not None else np.inf
-        if a is not None and (snr < self.snr_switch or bic_a <= bic_b):
+        margin = lambda r: (r.delta_chi2_runner_up_prior if np.isfinite(r.delta_chi2_runner_up_prior) else r.delta_chi2_runner_up) if r is not None else -np.inf
+        if b is None or (a is not None and snr < self.snr_switch):
             chosen, result = "lines", a
-        else:
+        elif a is None or snr > self.snr_continuum:
             chosen, result = "continuum", b
+        else:
+            chosen, result = ("continuum", b) if margin(b) > margin(a) else ("lines", a)
         zwarn = ZWarn.NONE
         if a is not None and b is not None:
             dv = C_KMS * abs(a.z - b.z) / (1 + min(a.z, b.z))
