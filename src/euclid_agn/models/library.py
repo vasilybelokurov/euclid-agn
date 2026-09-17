@@ -78,16 +78,21 @@ class Template:
         if not bad.any():
             return self
         edges = np.flatnonzero(np.diff(np.concatenate([[0], bad.astype(int), [0]])))
+        narrow = np.zeros_like(bad)
         for start, stop in zip(edges[::2], edges[1::2], strict=True):
             lo, hi = self.wavelength[start], self.wavelength[stop - 1]
             width = hi - lo
             window = (self.wavelength > lo - 1.5 * width) & (self.wavelength < hi + 1.5 * width) & self.mask
-            if window.sum() < 20:
+            if stop - start < 8 or window.sum() < 20:
+                narrow[start:stop] = True  # a defect, not a gap: linear interpolation below
                 continue
             x = np.log(self.wavelength[window]); y = np.log(np.clip(self.flux[window], 1e-300, None))
             coefficients = np.polyfit(x - x.mean(), y, 3)
             xg = np.log(self.wavelength[start:stop]) - x.mean()
             flux[start:stop] = np.exp(np.polyval(coefficients, xg))
+        if narrow.any():
+            clean = ~narrow & np.isfinite(flux)
+            flux[narrow] = np.interp(self.wavelength[narrow], self.wavelength[clean], flux[clean])
         return Template(self.name, self.kind, self.wavelength, flux, np.ones_like(self.mask), {**self.metadata, "bridged_gaps": True})
 
 
@@ -133,6 +138,50 @@ def load_xsl_ssp_library(root: str | Path = DEFAULT_ROOT, pattern: str = "xsl_ss
         out.append(load_xsl_ssp(f))
     if not out:
         raise FileNotFoundError(f"no XSL SSP files under {root}/{pattern}")
+    return out
+
+
+def load_xsl_dr3_star(path: str | Path, gaps=XSL_TELLURIC_GAPS) -> Template:
+    """One XSL DR3 stellar spectrum (Verro et al. 2022, A&A 660, A34) -> Template.
+
+    Uses the dereddened flux ``FLUX_DR`` when the file has it, else ``FLUX``.
+    Wavelength is nm in the file.  Pixels in the telluric gaps, non-finite or
+    non-positive are masked (the ``ARM_ZERO`` files with a missing arm are best
+    excluded by the caller).  Header quality flags are kept in ``metadata``.
+    """
+    from astropy.io import fits
+
+    path = Path(path)
+    with fits.open(path) as handle:
+        header = handle[0].header
+        data = handle[1].data
+        names = handle[1].columns.names
+        wavelength = np.asarray(data["WAVE"], dtype=np.float64) * 10.0
+        column = "FLUX_DR" if "FLUX_DR" in names else "FLUX"
+        flux = np.asarray(data[column], dtype=np.float64)
+    mask = np.isfinite(flux) & (flux > 0)
+    for lo, hi in gaps:
+        mask &= ~((wavelength >= lo) & (wavelength <= hi))
+    meta = {"source": str(path), "library": "XSL DR3", "flux_column": column}
+    for key in ("OBJECT", "XSL_ID", "SNR", "AV_VAL", "LOSS_COR", "ARM_ZERO", "REST_NIR", "REST_VIS", "WAVY_NIR", "HAIR_NIR"):
+        if key in header:
+            meta[key.lower()] = header[key]
+    return Template(str(header.get("XSL_ID", path.stem)).strip(), "STAR", wavelength, flux, mask, meta)
+
+
+def load_xsl_dr3_library(root: str | Path = DEFAULT_ROOT, pattern: str = "xsl_dr3/**/xsl_spectrum_*_merged.fits",
+                         min_snr: float = 20.0) -> list[Template]:
+    """XSL DR3 stars with both arms present and median S/N >= ``min_snr``."""
+    out = []
+    for f in sorted(Path(root).expanduser().glob(pattern)):
+        t = load_xsl_dr3_star(f)
+        if t.metadata.get("arm_zero") or float(t.metadata.get("snr", 0.0) or 0.0) < min_snr:
+            continue
+        if t.mask.mean() < 0.8:
+            continue
+        out.append(t)
+    if not out:
+        raise FileNotFoundError(f"no XSL DR3 spectra under {root}/{pattern}")
     return out
 
 

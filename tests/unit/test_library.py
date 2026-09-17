@@ -103,3 +103,33 @@ def test_glikman_composite_loads_and_projects():
     for z in (0.1, 1.2, 3.5):
         column = project_template(q, projected, z)
         assert column is not None and np.all(np.isfinite(column)), z
+
+
+HAVE_XSL_DR3 = any(Path(DEFAULT_ROOT).glob("xsl_dr3/**/xsl_spectrum_*_merged.fits"))
+
+
+@pytest.mark.skipif(not HAVE_XSL_DR3, reason="XSL DR3 not downloaded")
+def test_xsl_dr3_star_loads_in_angstrom_with_gaps_masked():
+    from euclid_agn.models.library import load_xsl_dr3_star
+
+    f = sorted(Path(DEFAULT_ROOT).glob("xsl_dr3/**/xsl_spectrum_*_merged.fits"))[0]
+    t = load_xsl_dr3_star(f)
+    assert t.kind == "STAR" and 3400 < t.wavelength[0] < 3600 and 24000 < t.wavelength[-1] < 25000
+    assert not t.mask[(t.wavelength > 13600) & (t.wavelength < 14200)].any()
+    assert t.mask[(t.wavelength > 15000) & (t.wavelength < 17000)].mean() > 0.95
+    assert np.isfinite(t.bridged().flux).all()
+
+
+def test_bridging_interpolates_isolated_defects_and_cubics_wide_gaps():
+    from euclid_agn.models.library import Template
+
+    w = np.exp(np.arange(np.log(9000.0), np.log(20000.0), 1e-4))
+    flux = (w / 15000.0) ** -1.0
+    mask = np.ones(w.size, bool)
+    mask[500] = False; mask[1200:1203] = False  # single-pixel and 3-pixel defects
+    gap = (w > 13500) & (w < 14250); mask[gap] = False  # telluric gap
+    t = Template("toy", "GALAXY", w, np.where(mask, flux, np.nan), mask)
+    b = t.bridged()
+    assert np.isfinite(b.flux).all()
+    assert np.allclose(b.flux[[500, 1200, 1201, 1202]], flux[[500, 1200, 1201, 1202]], rtol=1e-3)
+    assert np.allclose(b.flux[gap], flux[gap], rtol=2e-2)
