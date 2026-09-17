@@ -58,9 +58,15 @@ def build_engine(wavelength, bin_width, star_source: str = "xsl") -> RedshiftEng
         # needs shape coverage, not stellar parameters, at R ~ 450
         lib = load_phoenix_library(mh_values=(0.0, -1.0), teff_step=2)
         stars = pca_templates(build_pca_basis(lib, n_components=8, wmin=6000, wmax=19500))
+    elif star_source == "phoenix_arch":
+        # non-negative archetypes, as constrained as the galaxy class: dwarfs (log g 4.5) and giants
+        # (log g 2.0) every 500 K, Z = 0 and -1
+        lib = load_phoenix_library(mh_values=(0.0, -1.0), teff_step=5)
+        stars = [t for t in lib if t.metadata["logg"] in (2.0, 4.5)]
     else:
         raise ValueError(star_source)
-    specs = default_specs(galaxy, qso, stars, galaxy_nonnegative=True, z_max_galaxy=2.0, z_max_qso=3.3)
+    specs = default_specs(galaxy, qso, stars, galaxy_nonnegative=True, star_nonnegative=star_source.endswith("arch"),
+                          z_max_galaxy=2.0, z_max_qso=3.3)
     return RedshiftEngine(specs, wavelength, bin_width)
 
 

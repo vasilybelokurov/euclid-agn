@@ -26,8 +26,8 @@ lam = np.exp(h["CRVAL1"] + (np.arange(h["NAXIS1"]) + 1 - h.get("CRPIX1", 1.0)) *
 fits.PrimaryHDU(lam.astype(np.float64)).writeto(phx / "WAVE_PHOENIX_R10000.fits", overwrite=True)
 print("wavefile", lam[0], lam[-1], lam.size)
 PY
-rvs_read_grid --prefix "$PHX/" --glob_mask "Z*/lte*.fits" --templdb "$OUT/files.db"  # rvspecfit concatenates prefix+mask: trailing slash required
-rvs_make_interpol --setup nisp_red --lambda0 11800 --lambda1 19100 --resol_func "x/32.3" --step 6.7 \
+[ -f "$OUT/files.db" ] || rvs_read_grid --prefix "$PHX/" --glob_mask "Z*/lte*.fits" --templdb "$OUT/files.db"  # rvspecfit concatenates prefix+mask: trailing slash required
+rvs_make_interpol --setup nisp_red --lambda0 11800 --lambda1 19100 --resol_func "x/32.3" --step 6.7 --parameter_names teff,logg,feh \
   --templdb "$OUT/files.db" --templprefix "$PHX" --wavefile "$PHX/WAVE_PHOENIX_R10000.fits" \
   --oprefix "$OUT/templ_data" --nthreads 8
 rvs_make_nd --prefix "$OUT/templ_data" --setup nisp_red
