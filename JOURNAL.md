@@ -1923,3 +1923,27 @@ position: of 168 objects within 4′, 27 have S/N > 3.  The three brightest
 velocities +40, −123, +112 km/s — the Galactic-star null the GC test needs,
 and a demonstration that the class engine does not manufacture redshifts for
 bright point sources.
+
+**Null distribution measured** (`outputs/control_field_velocities.parquet`):
+385 objects in six random Q1 fields, S/N-stratified 3 → >100, fitted exactly
+as the GC candidates will be (QSO class off — see below), rvspecfit with
+±3000 km/s.  The random-field velocity distribution is sharply peaked at zero
+and nearly empty where a 15–25 Mpc host's satellites would be:
+
+| rvspecfit v (km/s) | fraction | | S/N > 15 |
+|---|---:|---|---:|
+| \|v\| < 500 | 53 % | \|v\| < 300 | 78 % |
+| **+500 … +1600** | **2 %** | **900–1600** | **2 %** |
+| railed \|v\| > 2500 | 18 % | railed | 7 % |
+
+STAR-class fraction rises 75 % (S/N 3–5) → 100 % (S/N > 100); rvspecfit's
+formal velocity error is 1266 / 562 / 483 / 68 / 24 km/s at S/N 3–8 / 8–15 /
+15–30 / 30–100 / > 100.  So a UCD at H_AB 17–18 (S/N 30–60) is an individual
+detection and a bright GC at H_AB 18.5–19 a 2–4 σ one, against a 2 % false
+positive rate.
+
+**The QSO class had to be switched off** for this test: on the same control
+field with it enabled, 12 of 23 objects at S/N 3–10 were called QSO (one
+composite, free z to 3.3 over 1,100 trials is the most flexible hypothesis),
+while at S/N > 20 all were correctly STAR.  With GALAXY (z ≤ 0.05) and STAR
+only, the control gives STAR for 75–100 %.
