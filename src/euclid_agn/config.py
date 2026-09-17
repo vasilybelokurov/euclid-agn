@@ -55,8 +55,8 @@ class ContinuumConfig(BaseModel):
 class NarrowLineConfig(BaseModel):
     """Non-parametric shared NLR velocity profile."""
 
-    velocity_half_width_kms: float = 1200.0
-    velocity_step_kms: float = 100.0
+    velocity_half_width_kms: float = 400.0
+    velocity_step_kms: float = 200.0
     smoothness_lambda: float = 1.0
     non_negative: bool = True
 

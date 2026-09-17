@@ -199,8 +199,14 @@ class ScreenSettings:
     #: When given they replace the linear component penalty, which is a fit to
     #: the same numbers and loses the per-system detail.
     system_null_offsets: dict[str, float] | None = None
-    narrow_velocity_half_width_kms: float = 1000.0
-    narrow_velocity_step_kms: float = 250.0
+    #: Extent of the shared narrow-line velocity profile.  This is the
+    #: model's *definition* of narrow: anything the profile can represent is
+    #: narrow, anything wider must go to the broad component.  VERIFIED on real
+    #: spectra with injected broad lines: at +/-1000 km/s the M0 profile widened
+    #: to 450-650 km/s and absorbed a 700 km/s injection entirely (Delta chi2 =
+    #: 0); at +/-400 it stayed at the LSF-limited ~265 km/s.
+    narrow_velocity_half_width_kms: float = 400.0
+    narrow_velocity_step_kms: float = 200.0
     narrow_smoothness: float = 1.0
     require_line_in_range: bool = True
 

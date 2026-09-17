@@ -978,3 +978,53 @@ parameters were read off this same DESI sample (σ and outlier fraction), so
 the numbers are optimistic by an amount a held-out sample will have to measure.
 
 Tests: **277 offline**.
+
+---
+
+## 2026-09-17 — session 8: holdout, and the first injection/recovery
+
+### Holdout
+
+Fourteen fresh SIR files, none used to set the prior, holding 112 DESI galaxies
+at 0.9 < z < 1.8; prior parameters frozen at the defaults (σ = 0.05, outlier
+fraction 0.13).  Production configuration (blind scan + templates + PHZ prior +
+catalogue hypotheses):
+
+| | Hα Δχ² > 25 | Hα Δχ² > 50 | Hα not detectable |
+|---|---:|---:|---:|
+| training sample (n = 57 / 32 / 36) | 60 % | 69 % | 3 % |
+| **holdout (n = 61 / 33 / 22)** | **61 %** | **76 %** | 5 % |
+| Euclid SPE vs DESI, same holdout | 25 % | | |
+
+The training numbers were not optimistic.  Cache now 46 files, 33 tiles.
+
+### Injection/recovery framework (`validation/injections.py`)
+
+Broad lines are injected into *real* spectra at redshifts already recovered
+against DESI, using each object's own LSF and grid; the M0/M1 measurement runs
+at that redshift; recovered flux and Δχ² are recorded against the injection
+with LSF, S/N, usable fraction, noise inflation and continuum orthogonality.
+Two nulls on the same spectra with nothing injected — M1 at displaced
+redshifts, and a broad component forced onto [N II] — give the false-positive
+distribution from which thresholds are read.
+
+**First run found a model degeneracy.**  38 targets, fluxes 10⁻¹⁷–10⁻¹⁵,
+widths 700/1500/3000 km s⁻¹.  Nulls were tight (p99 of effective Δχ² 1.3 /
+4.9 / 2.5 for on-redshift / off-redshift / forbidden), but completeness at
+10⁻¹⁵ erg s⁻¹ cm⁻² and σ = 700 km s⁻¹ was **zero**.  Cause: the shared
+non-parametric NLR profile spanned ±1000 km s⁻¹, so a 700 km s⁻¹ line is a
+perfectly good *narrow* profile and M0 absorbed it — the profile's fitted width
+rose to 450–650 km s⁻¹ on injection.  Capping the profile at ±400 km s⁻¹
+(step 200) keeps it LSF-limited at ~265 km s⁻¹.  That cap is now the model's
+definition of "narrow": anything the profile can represent is narrow, anything
+wider must go to the broad component.  Genuinely broad NLRs (σ ≳ 400 km s⁻¹)
+will leak into the broad branch at Euclid's resolution; the recorded
+`broad_resolution_ratio` is the axis on which that has to be reported.
+
+The remaining smallness of Δχ² is the data, not the model: for a faint ELG
+(continuum S/N ≈ 3, ~3×10⁻¹⁸ per pixel) a 10⁻¹⁵ line at 3000 km s⁻¹ is spread
+over ~11 pixels at S/N ≈ 1 each, Δχ² ≈ 11.  Euclid's broad-line flux limit for
+such hosts is intrinsically several × 10⁻¹⁶, roughly √(σ_broad/σ_narrow) times
+the narrow-line limit.
+
+Re-run with the cap, at 12 and 6 continuum knots, appended below.

@@ -32,8 +32,10 @@ continuum:
   smoothness: 0.0
 
 narrow:
-  velocity_half_width_kms: 1200.0
-  velocity_step_kms: 100.0
+  # The shared NLR profile's extent defines "narrow": a wider profile absorbs
+  # broad lines into M0 (measured: at 1200 km/s a 700 km/s injection vanished).
+  velocity_half_width_kms: 400.0
+  velocity_step_kms: 200.0
   smoothness_lambda: 1.0
   non_negative: true
 
