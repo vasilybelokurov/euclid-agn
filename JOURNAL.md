@@ -1633,3 +1633,15 @@ because the 5–20 band is hard for *both* models (continuum model 5–27 %
 there, lines 3–7 %).  Set `snr_continuum = 8`; margins decide only in
 5 < S/N < 8.  The engine is at the ceiling the two models allow; the next
 gains must come from the models (young/dusty archetypes; line-width grid).
+
+### rvspecfit installed (package only)
+
+`pip install rvspecfit` → 0.9.0 in the venv; CLI tools `rvs_read_grid`,
+`rvs_make_interpol`, `rvs_make_nd`, `rvs_make_ccf`, `rvs_desi_fit` present.
+Template preparation needs the PHOENIX grid on disk (`rvs_read_grid --prefix
+… --glob_mask …` reads Teff/log g/[Fe/H]/[α/M] from FITS headers), then
+`rvs_make_interpol --setup nisp_red --lambda0 11900 --lambda1 19000
+--resol_func "x/32.3" --step 13.4` — the NISP LSF is a fixed 13.7 Å σ
+(FWHM 32.3 Å) for point sources, so R = λ/32.3 varies from 370 to 590 across
+the grism and `--resol_func` expresses that exactly.  Download of the PHOENIX
+subset pending the user's go-ahead.
