@@ -89,3 +89,15 @@ def test_partial_coverage_marks_nan_not_failure():
     assert np.isfinite(cube.columns[1]).all()
     keep = np.ones(w.size, bool)
     assert list(cube.covers(keep)) == [False, True]
+
+
+def test_spline_nuisance_recovers_redshift_from_features_only():
+    spectrum = toy_spectrum(z=0.08)
+    projected = prepare(spectrum, ScreenSettings(n_knots=6, outlier_threshold=0.0))
+    cube = build_cube(toy_templates(), redshift_grid(0.0, 0.3, 300.0), spectrum.wavelength, 13.4, 14.0)
+    res = cube_scan(spectrum, projected, cube, spline_nuisance=True)
+    # the toy's 800 A-wide bump is mostly absorbed by the spline; the narrow dip carries the redshift
+    assert abs(res.z - 0.08) < 0.006
+    assert res.n_parameters == 2 + projected.basis.shape[1]
+    # the data are orthogonal to the spline, so the null chi2 is the projected chi2
+    assert res.chi2_null == pytest.approx(projected.chi2_continuum, rel=1e-9)

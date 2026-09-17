@@ -30,6 +30,7 @@ import pandas as pd
 from euclid_agn.constants import C_KMS
 from euclid_agn.fit.screen import ScreenSettings, prepare
 from euclid_agn.fit.template_cube import CubeStore, cube_scan, redshift_grid
+from euclid_agn.spectra.coherence import apply_coherence_mask
 from euclid_agn.io.sir import open_sir_file
 from euclid_agn.models.library import (
     DEFAULT_ROOT,
@@ -58,6 +59,11 @@ class Variant:
     archetype_step: int = 1  # for basis=archetypes: take every k-th SSP of the (age, [M/H]) selection
     step_kms: float = 300.0
     z_max: float = 1.0
+    nuisance: str = "poly"  # poly | spline (spline: n_knots B-spline projected out of data and templates)
+    n_knots: int = 12
+    coherence_mask: bool = False  # reject pixels the dithers disagree about before fitting
+    coherence_threshold: float = 5.0
+    systematic_fraction: float = 0.0  # fractional flux error added in quadrature (template/calibration floor)
     extras: dict = field(default_factory=dict)
 
     def templates(self, root=DEFAULT_ROOT) -> list[Template]:
@@ -75,6 +81,23 @@ def pca_templates(basis) -> list[Template]:
     for i, c in enumerate(basis.components):
         out.append(Template(f"pc{i + 1}", basis.kind, basis.wavelength, c, np.ones(basis.wavelength.size, bool)))
     return out
+
+
+def with_systematic_floor(spectrum, fraction: float):
+    """Variance += (fraction * smoothed flux)^2: a per-pixel floor for template and calibration error.
+
+    At S/N ~ 100 per pixel the archive variance makes a 3 % template mismatch
+    a 3-sigma residual on every pixel; the floor keeps such broad-band
+    mismatch from dominating the chi-squared over genuine spectral features.
+    The smoothing (31-pixel median) stops the floor tracking noise spikes.
+    """
+    from dataclasses import replace
+    from scipy.ndimage import median_filter
+
+    ok = spectrum.usable()
+    level = np.abs(median_filter(np.where(ok, spectrum.flux, np.nanmedian(spectrum.flux[ok])), size=31, mode="nearest"))
+    metadata = {**spectrum.metadata, "systematic_fraction": float(fraction)}
+    return replace(spectrum, variance=spectrum.variance + (fraction * level) ** 2, metadata=metadata)
 
 
 def load_sample(path: Path = DEFAULT_SAMPLE) -> pd.DataFrame:
@@ -108,8 +131,8 @@ def object_index(cache: Path = DEFAULT_CACHE, index_path: Path | None = None) ->
     return idx
 
 
-def iter_spectra(sample: pd.DataFrame, cache: Path = DEFAULT_CACHE):
-    """Yield (row, combined Spectrum1D), grouped by file so each opens once."""
+def iter_spectra(sample: pd.DataFrame, cache: Path = DEFAULT_CACHE, with_dithers: bool = False):
+    """Yield (row, combined Spectrum1D [, observation]), grouped by file so each opens once."""
     idx = object_index(cache).set_index("object_id")["file"]
     located = sample.assign(file=sample["object_id"].map(idx))
     missing = located["file"].isna().sum()
@@ -118,8 +141,8 @@ def iter_spectra(sample: pd.DataFrame, cache: Path = DEFAULT_CACHE):
     for path, rows in located.dropna(subset=["file"]).groupby("file"):
         with open_sir_file(path) as f:
             for _, row in rows.iterrows():
-                obs = f.read_observation(int(row["object_id"]), with_dithers=False)
-                yield row, obs.combined
+                obs = f.read_observation(int(row["object_id"]), with_dithers=with_dithers)
+                yield (row, obs.combined, obs) if with_dithers else (row, obs.combined)
 
 
 def run_variants(
@@ -136,18 +159,32 @@ def run_variants(
     rows = []
     started = time.time()
     n_spectra = 0
-    for row, spectrum in iter_spectra(sample, cache):
-        projected = prepare(spectrum, settings)
-        if projected is None:
-            continue
+    need_dithers = any(v.coherence_mask for v in variants)
+    for item in iter_spectra(sample, cache, with_dithers=need_dithers):
+        row, spectrum = item[0], item[1]
+        observation = item[2] if need_dithers else None
+        prepared = {}  # by (n_knots, masked): spline-nuisance variants need their own continuum basis
+        masked_spectrum, n_bad = None, 0
+        if need_dithers:
+            masked_spectrum, report = apply_coherence_mask(observation, threshold=max(v.coherence_threshold for v in variants))
+            n_bad = report.n_bad if report is not None else 0
         n_spectra += 1
         for v in variants:
             if v.name not in stores:
                 stores[v.name] = CubeStore({"GALAXY": v.templates(root)}, redshift_grid(0.0, v.z_max, v.step_kms),
                                            spectrum.wavelength, spectrum.bin_width)
             cube = stores[v.name].get("GALAXY", spectrum.lsf_sigma)
-            res = cube_scan(spectrum, projected, cube, poly_degree=v.poly_degree, nonnegative=v.nonnegative,
-                            z_prior=float(row.get("phz_median", np.nan)))
+            source = masked_spectrum if v.coherence_mask else spectrum
+            if v.systematic_fraction > 0:
+                source = with_systematic_floor(source, v.systematic_fraction)
+            key = (v.n_knots if v.nuisance == "spline" else 1, v.coherence_mask, v.systematic_fraction)
+            if key not in prepared:
+                prepared[key] = prepare(source, ScreenSettings(**{**settings.__dict__, "n_knots": key[0]}))
+            this = prepared[key]
+            if this is None:
+                continue
+            res = cube_scan(source, this, cube, poly_degree=v.poly_degree, nonnegative=v.nonnegative,
+                            z_prior=float(row.get("phz_median", np.nan)), spline_nuisance=v.nuisance == "spline")
             if res is None:
                 continue
             desi_z = float(row["desi_z"])
@@ -158,6 +195,8 @@ def run_variants(
             out["chi2_red"] = res.chi2 / max(res.n_pixels - res.n_parameters, 1)
             out["dv"] = C_KMS * (res.z - desi_z) / (1 + desi_z)
             out["agree"] = abs(out["dv"]) < tolerance_kms
+            out["agree_001"] = abs(res.z - desi_z) / (1 + desi_z) < 0.01  # the catastrophic-failure convention
+            out["n_coherence_masked"] = n_bad if v.coherence_mask else 0
             out["dv_prior"] = C_KMS * (res.z_prior - desi_z) / (1 + desi_z) if np.isfinite(res.z_prior) else np.nan
             out["agree_prior"] = abs(out["dv_prior"]) < tolerance_kms if np.isfinite(out["dv_prior"]) else False
             rows.append(out)
@@ -171,8 +210,8 @@ def summarise(table: pd.DataFrame, cuts=(0, 10, 25, 50, 100)) -> pd.DataFrame:
     out = []
     z_bins = [(0.0, 0.15), (0.15, 0.3), (0.3, 0.45), (0.45, 0.9)]
     for name, g in table.groupby("variant", sort=False):
-        row = {"variant": name, "n": len(g), "agree": g["agree"].mean(), "agree_prior": g["agree_prior"].mean(),
-               "chi2_red_median": g["chi2_red"].median()}
+        row = {"variant": name, "n": len(g), "agree": g["agree"].mean(), "agree_001": g["agree_001"].mean(),
+               "agree_prior": g["agree_prior"].mean(), "chi2_red_median": g["chi2_red"].median()}
         for lo, hi in z_bins:
             s = g[(g.desi_z >= lo) & (g.desi_z < hi)]
             row[f"z{lo:.2f}-{hi:.2f}"] = s["agree"].mean() if len(s) else np.nan
@@ -193,6 +232,19 @@ DEFAULT_VARIANTS = [
     Variant("pca8_p1", n_components=8),
     Variant("arch_nnls_p1", basis="archetypes", nonnegative=True, archetype_step=6),
     Variant("arch_nnls_p1_young", basis="archetypes", nonnegative=True, archetype_step=6, log_age_min=7.7),
+    Variant("arch_nnls_p3", basis="archetypes", nonnegative=True, archetype_step=6, poly_degree=3),
+    Variant("arch_nnls_spline12", basis="archetypes", nonnegative=True, archetype_step=6, nuisance="spline", n_knots=12),
+    Variant("arch_nnls_spline6", basis="archetypes", nonnegative=True, archetype_step=6, nuisance="spline", n_knots=6),
+    Variant("pca5_spline12", nuisance="spline", n_knots=12),
+    Variant("arch_all_nnls_p1", basis="archetypes", nonnegative=True, archetype_step=1),
+    Variant("arch_nnls_p1_coh", basis="archetypes", nonnegative=True, archetype_step=6, coherence_mask=True),
+    Variant("arch_nnls_p1_coh3", basis="archetypes", nonnegative=True, archetype_step=6, coherence_mask=True, coherence_threshold=3.0),
+    Variant("arch_nnls_p3_coh", basis="archetypes", nonnegative=True, archetype_step=6, poly_degree=3, coherence_mask=True),
+    Variant("arch_nnls_p1_sys02", basis="archetypes", nonnegative=True, archetype_step=6, systematic_fraction=0.02),
+    Variant("arch_nnls_p1_sys05", basis="archetypes", nonnegative=True, archetype_step=6, systematic_fraction=0.05),
+    Variant("arch_nnls_p1_coh_sys03", basis="archetypes", nonnegative=True, archetype_step=6, coherence_mask=True, systematic_fraction=0.03),
+    Variant("arch_nnls_spline12_coh", basis="archetypes", nonnegative=True, archetype_step=6, nuisance="spline", n_knots=12, coherence_mask=True),
+    Variant("pca5_p2_coh_sys03", poly_degree=2, coherence_mask=True, systematic_fraction=0.03),
 ]
 
 

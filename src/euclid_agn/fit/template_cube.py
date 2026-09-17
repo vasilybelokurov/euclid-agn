@@ -131,8 +131,16 @@ def cube_scan(
     z_prior: float | None = None,
     prior_sigma: float = 0.05,
     prior_outlier_fraction: float = 0.13,
+    spline_nuisance: bool = False,
 ) -> ContinuumScanResult | None:
     """Chi-squared of the cube's templates (+ polynomial) at every redshift.
+
+    ``spline_nuisance``: instead of the polynomial, the spline continuum basis
+    already in ``projected`` (``n_knots`` of the ScreenSettings used to prepare
+    it) is projected out of both data and templates.  Only spectral *features*
+    then contribute: the fit is insensitive to broad-band shape errors
+    (flux calibration, extraction aperture of extended sources) at the cost of
+    discarding the 1.6 micron bump's shape.
 
     Unconstrained: batched normal equations, one ``solve`` for all redshifts.
     ``nonnegative``: template coefficients >= 0 via NNLS (polynomial columns
@@ -149,7 +157,11 @@ def cube_scan(
     keep = np.isin(spectrum.wavelength, projected.wavelength)
     weight = projected.weight
     data_w = spectrum.flux[keep] * weight
-    poly = polynomial_columns(projected.wavelength, poly_degree, reference=spectrum.wavelength) * weight[:, None]
+    if spline_nuisance:
+        poly = np.zeros((weight.size, 0))
+        data_w = data_w - projected.basis @ (projected.basis.T @ data_w)
+    else:
+        poly = polynomial_columns(projected.wavelength, poly_degree, reference=spectrum.wavelength) * weight[:, None]
     covered = cube.covers(keep)
     n_z = cube.grid_z.size
     chi2 = np.full(n_z, np.nan)
@@ -157,6 +169,9 @@ def cube_scan(
     if not covered.any():
         return None
     templates = cube.columns[covered][:, keep, :] * weight[None, :, None]  # (n_cov, n_kept, n_t)
+    if spline_nuisance:
+        b = projected.basis
+        templates = templates - np.einsum("ik,zkj->zij", b, np.einsum("ik,zij->zkj", b, templates))
     n_cov = templates.shape[0]
     poly_b = np.broadcast_to(poly, (n_cov, *poly.shape))
     design = np.concatenate([templates, poly_b], axis=2)  # (n_cov, n_kept, k)
@@ -186,18 +201,21 @@ def cube_scan(
             chi2[i] = rnorm**2
             c = np.concatenate([c[:n_t], c[n_t : n_t + poly.shape[1]] - c[n_t + poly.shape[1] :]]) / scale[j, 0, :]
             coefficients[i] = c
-    # null: polynomial only
-    if poly.shape[1]:
+    # null: nuisance only
+    if spline_nuisance:
+        resid0 = data_w  # already orthogonal to the spline basis
+    elif poly.shape[1]:
         c0, *_ = np.linalg.lstsq(poly, data_w, rcond=None)
         resid0 = data_w - poly @ c0
     else:
         resid0 = data_w
+    n_nuisance = projected.basis.shape[1] if spline_nuisance else poly.shape[1]
     chi2_null = float(resid0 @ resid0)
     best, delta_runner, z_runner = _best_and_runner(cube.grid_z, chi2, separation_kms)
     result = ContinuumScanResult(
         z=float(cube.grid_z[best]), chi2=float(chi2[best]), chi2_null=chi2_null,
         delta_chi2_runner_up=delta_runner, z_runner_up=z_runner, n_pixels=int(keep.sum()),
-        n_parameters=cube.n_templates + poly.shape[1], kind=cube.kind, grid_z=cube.grid_z, grid_chi2=chi2,
+        n_parameters=cube.n_templates + n_nuisance, kind=cube.kind, grid_z=cube.grid_z, grid_chi2=chi2,
         coefficients=coefficients[best],
     )
     if z_prior is not None and np.isfinite(z_prior):
@@ -208,6 +226,38 @@ def cube_scan(
     return result
 
 
+def fit_at(spectrum, projected, cube: TemplateCube, z: float, **kwargs) -> ContinuumScanResult | None:
+    """The scan restricted to the grid point nearest ``z`` (for diagnostics)."""
+    i = int(np.argmin(np.abs(np.log1p(cube.grid_z) - np.log1p(z))))
+    single = TemplateCube(cube.kind, cube.grid_z[i : i + 1], cube.wavelength, cube.columns[i : i + 1], cube.lsf_sigma,
+                          cube.names, cube.metadata)
+    return cube_scan(spectrum, projected, single, **kwargs)
+
+
+@blas_safe
+def model_flux(spectrum, projected, cube: TemplateCube, result: ContinuumScanResult, poly_degree: int = 1,
+               spline_nuisance: bool = False) -> np.ndarray:
+    """Best-fit model (flux units) on the kept pixels for ``result``.
+
+    With ``spline_nuisance`` the returned model is the template part plus the
+    spline component that best fits the residual, so it is comparable to the data.
+    """
+    keep = np.isin(spectrum.wavelength, projected.wavelength)
+    i = int(np.argmin(np.abs(cube.grid_z - result.z)))
+    templates = cube.columns[i][keep]  # (n_kept, n_t), flux units
+    n_t = templates.shape[1]
+    coef = np.asarray(result.coefficients)
+    model = templates @ coef[:n_t]
+    if spline_nuisance:
+        w = projected.weight
+        resid_w = (spectrum.flux[keep] - model) * w
+        model = model + (projected.basis @ (projected.basis.T @ resid_w)) / w
+    else:
+        poly = polynomial_columns(projected.wavelength, poly_degree, reference=spectrum.wavelength)
+        model = model + poly @ coef[n_t : n_t + poly.shape[1]]
+    return model
+
+
 class CubeStore:
     """Cubes keyed on (template set name, LSF bucket); built lazily."""
 
@@ -215,7 +265,7 @@ class CubeStore:
                  bin_width: float, lsf_step: float = 5.0, extra_sigma_kms: dict[str, float] | None = None):
         self.templates_by_kind = templates_by_kind
         self.grid_z = np.asarray(grid_z, float)
-        self.wavelength = np.asarray(wavelength, float)
+        self.wavelength = None if wavelength is None else np.asarray(wavelength, float)
         self.bin_width = float(bin_width)
         self.lsf_step = float(lsf_step)
         self.extra_sigma_kms = extra_sigma_kms or {}
@@ -227,6 +277,8 @@ class CubeStore:
     def get(self, kind: str, lsf_sigma: float) -> TemplateCube:
         key = (kind, self.lsf_bucket(lsf_sigma))
         if key not in self._cubes:
+            if self.wavelength is None:
+                raise ValueError("CubeStore.wavelength must be set before building cubes")
             self._cubes[key] = build_cube(self.templates_by_kind[kind], self.grid_z, self.wavelength, self.bin_width,
                                           key[1], self.extra_sigma_kms.get(kind, 0.0), kind=kind)
         return self._cubes[key]
@@ -235,5 +287,5 @@ class CubeStore:
         return len(self._cubes)
 
 
-__all__ = ["TemplateCube", "CubeStore", "build_cube", "cube_scan", "polynomial_columns", "prior_penalty",
+__all__ = ["TemplateCube", "CubeStore", "build_cube", "cube_scan", "fit_at", "model_flux", "polynomial_columns", "prior_penalty",
            "redshift_grid"]

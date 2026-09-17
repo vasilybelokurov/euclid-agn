@@ -86,6 +86,15 @@ class Spectrum1D:
         metadata["variance_scale"] = float(factor) * float(metadata.get("variance_scale", 1.0))
         return replace(self, variance=self.variance * float(factor), metadata=metadata)
 
+    def with_extra_mask(self, bad: np.ndarray, reason: str = "coherence"):
+        """A copy with ``NOT_USE`` set on ``bad`` pixels; the archive mask is never edited in place."""
+        bad = np.asarray(bad, dtype=bool)
+        if bad.shape != self.mask.shape:
+            raise ValueError("extra mask must match the wavelength grid")
+        metadata = dict(self.metadata)
+        metadata[f"extra_mask_{reason}"] = int(bad.sum())
+        return replace(self, mask=np.where(bad, self.mask | 1, self.mask), metadata=metadata)
+
     def usable(self, reject: tuple[str, ...] | None = None) -> np.ndarray:
         """Boolean array of pixels admissible to a fit.
 
