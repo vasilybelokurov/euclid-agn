@@ -1304,3 +1304,70 @@ and is the reproducible form of what was previously an inline script.
 
 Pilot on 60 objects: PCA-5 + linear 38 %, archetypes (18 SSPs, NNLS) 52 %.
 Full 8-variant sweep on 489 objects running.
+
+### Sweep 1 (8 variants, 489 objects, 6.5 min total) and the failure diagnosis
+
+| variant | within 1000 km/s | z<0.15 | 0.15–0.3 | 0.3–0.45 | purity Δχ²>25 (kept) |
+|---|---:|---:|---:|---:|---:|
+| PCA-5 + linear | 29.9 % | 54 | 16 | 18 | 41 % (59 %) |
+| PCA-3 / PCA-2 / PCA-8 + linear | 30.5 / 30.9 / 27.8 | | | | |
+| PCA-5 + constant / + quadratic | 25.6 / 31.9 | | | | |
+| 18 SSP archetypes, NNLS, + linear | **34.2 %** | 59 | 21 | 22 | 43 % (68 %) |
+| same incl. young (log t ≥ 7.7) | 32.7 % | | | | |
+
+The basis and nuisance choice moves the answer by a few per cent; the PHZ
+prior by ~1 % (its cap of ≈11 is nothing against χ² gaps of hundreds).
+
+**Where the truth sits in χ²** (`validation/continuum_diagnostics.py`,
+`outputs/continuum_diagnostics_arch_nnls_p1.parquet`): for the 322 failures,
+χ²(z_DESI) − χ²_min has quartiles 45 / 114 / 455; only 7 % are within 10.  The
+wrong minima are not noise-level ties.  Median reduced χ² is 2.4 (right) vs
+3.0 (wrong) on the archive variance.
+
+**Three failure modes seen in the worst high-S/N objects**
+(`plots/continuum_failures/`):
+1. *Extended sources and tolerance.*  Object 2693182175649381778 (S/N 256,
+   LSF σ = 88 Å) is "wrong" by 1750 km/s: with an 88 Å LSF the redshift from
+   continuum shape cannot be better than ~10⁻² and a 1000 km/s tolerance is
+   the wrong yardstick.  Bright low-z galaxies are extended: LSF_SIG 20–40 Å
+   for 70 % of the sample, 40–120 Å for 18 %.  With the catastrophic-failure
+   convention |Δz|/(1+z) < 0.01 the archetype scan agrees for **40.5 %**
+   (34.2 % at 1000 km/s); LSF 40–80 Å objects: 56 %.
+2. *Dither-incoherent contamination.*  Object 2712466074669129632: the four
+   dithers read 14/15/10/17 ×10⁻¹⁷ at 1.59–1.68 µm and 0/27/12/22 at
+   1.75–1.78 µm; the combined pixels carry no mask bit.  New
+   `spectra/coherence.py` flags pixels whose dithers disagree (per-pixel
+   reduced χ² > 5 × the object's median, floor 8; grown by one pixel; pixels
+   with < 2 usable dithers).  On this object it removes 49 pixels and takes
+   the reduced χ² from 81 to 17 — but the redshift is still wrong (0.119 vs
+   0.054): masking the artefacts is necessary, not sufficient.
+3. *Structure common to all dithers.*  Object 2693698254649518660 (S/N 115)
+   has a 40 % depression over 1.3–1.55 µm present identically in all four
+   dithers: either real (then the DESI match is questionable) or a systematic
+   the dithers share.  No pixel test can reject it.
+
+**What actually controls success: brightness.**  Cross-matching the DESI
+file's Euclid photometry (`outputs/continuum_vs_spe_by_hmag.parquet`,
+`plots/continuum_redshift_vs_hmag.png`), agreement at |Δz|/(1+z) < 0.01:
+
+| H (Sérsic) | n | continuum (this work) | Euclid SPE | PHZ (< 0.05) | median S/N/pix |
+|---|---:|---:|---:|---:|---:|
+| 10–15 | 30 | **97 %** | 40 % | 97 % | 160 |
+| 15–16 | 61 | **67 %** | 25 % | 75 % | 83 |
+| 16–17 | 164 | **50 %** | 25 % | 67 % | 50 |
+| 17–18 | 195 | **27 %** | 16 % | 60 % | 30 |
+| 18–22 | 50 | 6 % | 6 % | 54 % | 16 |
+| all | 489 | 41 % | 20 % | 66 % | 41 |
+
+Match separation, deblending flag, Gaia match and DESI program are flat in
+success; DESI Δχ² > 1000 objects succeed at 57 % vs 23 % below (DESI itself is
+surer on the bright ones).  Reading: the red grism's continuum at z < 0.3 is
+enough for a redshift at H ≲ 16.5, and the information runs out by H ≈ 18 —
+the model-mismatch χ² values are large because, with 18 archetypes and ~700
+trial redshifts, the wrong minima are fits to noise and few-per-cent
+systematics.  In every bin this beats Euclid SPE by 1.7–2.7×, but for
+H > 17 the PHZ is the better estimate and the spectrum should refine, not
+replace, it.
+
+Sweep 2 (feature-only spline nuisance, all 108 archetypes, cubic) and sweep 3
+(coherence mask, 2–5 % systematic flux-error floor) are running.
