@@ -29,6 +29,7 @@ import pandas as pd
 
 from euclid_agn.constants import C_KMS
 from euclid_agn.fit.screen import ScreenSettings, prepare
+from euclid_agn.fit.joint_scan import joint_scan
 from euclid_agn.fit.template_cube import CubeStore, cube_scan, redshift_grid
 from euclid_agn.spectra.coherence import apply_coherence_mask
 from euclid_agn.io.sir import open_sir_file
@@ -64,6 +65,7 @@ class Variant:
     coherence_mask: bool = False  # reject pixels the dithers disagree about before fitting
     coherence_threshold: float = 5.0
     systematic_fraction: float = 0.0  # fractional flux error added in quadrature (template/calibration floor)
+    joint: bool = False  # continuum + emission-line templates in one solve (fit/joint_scan.py)
     extras: dict = field(default_factory=dict)
 
     def templates(self, root=DEFAULT_ROOT) -> list[Template]:
@@ -183,8 +185,12 @@ def run_variants(
             this = prepared[key]
             if this is None:
                 continue
-            res = cube_scan(source, this, cube, poly_degree=v.poly_degree, nonnegative=v.nonnegative,
-                            z_prior=float(row.get("phz_median", np.nan)), spline_nuisance=v.nuisance == "spline")
+            if v.joint:
+                res = joint_scan(source, this, cube, poly_degree=v.poly_degree, nonnegative=v.nonnegative,
+                                 z_prior=float(row.get("phz_median", np.nan)))
+            else:
+                res = cube_scan(source, this, cube, poly_degree=v.poly_degree, nonnegative=v.nonnegative,
+                                z_prior=float(row.get("phz_median", np.nan)), spline_nuisance=v.nuisance == "spline")
             if res is None:
                 continue
             desi_z = float(row["desi_z"])
@@ -245,6 +251,8 @@ DEFAULT_VARIANTS = [
     Variant("arch_nnls_p1_coh_sys03", basis="archetypes", nonnegative=True, archetype_step=6, coherence_mask=True, systematic_fraction=0.03),
     Variant("arch_nnls_spline12_coh", basis="archetypes", nonnegative=True, archetype_step=6, nuisance="spline", n_knots=12, coherence_mask=True),
     Variant("pca5_p2_coh_sys03", poly_degree=2, coherence_mask=True, systematic_fraction=0.03),
+    Variant("arch_nnls_p3_joint", basis="archetypes", nonnegative=True, archetype_step=6, poly_degree=3, joint=True),
+    Variant("arch_nnls_p3_coh_joint", basis="archetypes", nonnegative=True, archetype_step=6, poly_degree=3, joint=True, coherence_mask=True),
 ]
 
 

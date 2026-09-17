@@ -1371,3 +1371,37 @@ replace, it.
 
 Sweep 2 (feature-only spline nuisance, all 108 archetypes, cubic) and sweep 3
 (coherence mask, 2–5 % systematic flux-error floor) are running.
+
+### Sweep 2: nuisance flexibility and feature-only mode (489 objects)
+
+Agreement with DESI at |Δz|/(1+z) < 0.01 (`outputs/continuum_variants_2.parquet`):
+
+| variant | all | +PHZ prior | z<0.15 | 0.15–0.3 | 0.3–0.45 | 0.45–0.9 (n=9) |
+|---|---:|---:|---:|---:|---:|---:|
+| 18 archetypes NNLS + linear | 40.5 % | 41.3 | 63 | 30 | 27 | 11 |
+| 18 archetypes NNLS + **cubic** | **43.8 %** | **46.0** | 60 | 35 | 33 | 33 |
+| all 108 archetypes NNLS + linear | 44.0 % | 44.2 | 64 | 34 | 31 | 11 |
+| feature-only (12-knot spline projected out) | 26.6 % | 32.1 | 54 | 12 | 11 | 11 |
+| feature-only, 6 knots | 29.2 % | 32.5 | | | | |
+| PCA-5 feature-only | 25.4 % | 30.1 | | | | |
+
+A cubic nuisance polynomial lifts the 0.15–0.45 bins from ~28 % to ~34 %:
+part of what looked like model mismatch is broad-band calibration/extraction
+shape.  Removing the broad-band shape altogether (feature-only) loses 14
+points — the continuum *shape* is most of the information at these S/N.
+Adopted: archetypes + NNLS + cubic.
+
+### Joint continuum + emission-line scan (`fit/joint_scan.py`)
+
+At each trial z the design is [continuum archetypes | one fixed-ratio line
+template per system (Hα complex, Hβ/[O III], Pa-β/[S III], He I/Pa-γ,
+[O II]) | cubic].  Line amplitudes ≥ 0 always; continuum coefficients ≥ 0 in
+archetype mode; polynomial free — one NNLS per redshift (sign-split free
+columns).  At the best z the continuum-only refit gives `delta_chi2_lines`
+and the normal matrix gives each template's amplitude S/N.  Unit tests: a
+z = 1.2 Hα complex at S/N 8 continuum is recovered against the Pa-β
+alternative (the toy first injected a lone Hα — which the scan correctly
+called Pa-β at z = 0.126: a single line at 14442 Å *is* both); a line-free
+z = 0.1 continuum gets its redshift with `delta_chi2_lines` < 15.
+Cost ≈ 0.7 s per object (line columns rebuilt per z; vectorise later).
+Running on the 489 low-z galaxies now.
