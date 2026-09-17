@@ -72,12 +72,22 @@ def blind_best_redshift(
         if not runner_up.empty
         else float("inf")
     )
-    from euclid_agn.fit.screen import prepare
+    # The same margin without the prior: if this is <= 0 the prior decided.
+    data_margin = (
+        float(best["rank_statistic"] - runner_up["rank_statistic"].max())
+        if not runner_up.empty
+        else float("inf")
+    )
+    from euclid_agn.fit.screen import prepare, winning_line_edge_pixels
 
     projected = prepare(spectrum, settings)
     return {
         "z": float(best["z"]),
         "n_outlier_pixels": projected.n_outliers if projected is not None else 0,
+        "data_margin": data_margin,
+        "z_prior": z_prior if z_prior is not None else float("nan"),
+        "prior_penalty": float(best.get("prior_penalty", 0.0)),
+        "winning_line_edge_pixels": winning_line_edge_pixels(projected, str(best["system"]), str(best["template"]), float(best["z"])),
         "origin": str(best["origin"]),
         "system": str(best["system"]),
         "n_narrow_lines": int(best["n_narrow_lines"]),
@@ -87,7 +97,6 @@ def blind_best_redshift(
         "delta_chi2_penalised": float(best["delta_chi2_penalised"]),
         "delta_chi2_identification": float(best["delta_chi2_identification"]),
         "template": str(best["template"]),
-        "prior_penalty": float(best.get("prior_penalty", 0.0)),
         "n_components": int(best["n_components"]),
         "delta_chi2_over_other_system": margin,
     }

@@ -122,7 +122,7 @@ from euclid_agn.constants import (
 from euclid_agn.fit.hypotheses import RedshiftHypothesis
 from euclid_agn.models.broad import BroadFamily, sigma_grid
 from euclid_agn.models.forward import HypothesisFit, fit_hypothesis
-from euclid_agn.models.line_catalog import BY_SYSTEM, LineSystem, visible_systems
+from euclid_agn.models.line_catalog import BY_NAME, BY_SYSTEM, LineSystem, visible_systems
 from euclid_agn.models.narrow import NarrowSystem, velocity_grid
 from euclid_agn.models.templates import template_column, templates_for
 from euclid_agn.numerics import blas_safe
@@ -745,6 +745,24 @@ def refine_redshifts_locally(
     return refined
 
 
+def winning_line_edge_pixels(projected, system: str, template_name: str, z: float) -> float:
+    """Distance, in pixels, from the nearest template line of the winner to the
+    nearest end of the covered range.  Small values mean the identification
+    rests on a line at the edge."""
+    if projected is None:
+        return float("nan")
+    candidates = [t for t in templates_for(system) if t.name == template_name] or list(templates_for(system))
+    if not candidates:
+        return float("nan")
+    lo, hi = float(projected.wavelength[0]), float(projected.wavelength[-1])
+    distances = []
+    for name in candidates[0].ratios:
+        centre = BY_NAME[name].rest * (1.0 + z)
+        if lo <= centre <= hi:
+            distances.append(min(centre - lo, hi - centre) / projected.bin_width)
+    return float(min(distances)) if distances else float("nan")
+
+
 def rank_alternatives(scan: pd.DataFrame, winner) -> dict[str, float]:
     """How much better the winning hypothesis is than a different identification.
 
@@ -861,6 +879,15 @@ def screen_spectrum(
             "broad_sigma_max_identifiable_kms": candidate["broad_sigma_max_identifiable_kms"],
         }
         row.update(rank_alternatives(scan, candidate))
+        others = scan[scan["system"] != candidate["system"]]
+        row["data_margin"] = (
+            float(candidate["rank_statistic"] - others["rank_statistic"].max())
+            if not others.empty
+            else float("inf")
+        )
+        row["winning_line_edge_pixels"] = winning_line_edge_pixels(
+            projected_for_rows, str(candidate["system"]), str(candidate["template"]), float(candidate["z"])
+        )
         row.update(fit.summary())
         row["delta_chi2_refined_effective"] = row["delta_chi2"] / noise_inflation**2
         # A Delta chi2 from a model whose own reduced chi2 is far from one is
@@ -874,7 +901,9 @@ def screen_spectrum(
         if context:
             row.update(context)
         rows.append(row)
-    return pd.DataFrame(rows)
+    from euclid_agn.fit.quality import add_zwarn
+
+    return add_zwarn(pd.DataFrame(rows))
 
 
 def null_offsets_from_table(table: pd.DataFrame, statistic: str = "median") -> dict[str, float]:
