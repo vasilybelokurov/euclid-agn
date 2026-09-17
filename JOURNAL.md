@@ -1798,3 +1798,31 @@ Answer: ~50–80 km/s per star for H ≲ 17 (G ≲ 18.5, V ≲ 20 for K/M dwarfs
 V 21–22, where 40 % of fits are already off by > 300 km/s.  Below that the
 velocity is not measured.  The zero-point floor (~55 km/s) and 0.4-px dither
 mis-registration are the systematics to fix before the bright end can improve.
+
+### G and V from Euclid photometry alone (`validation/star_photometry_calibration.py`, `outputs/euclid_to_gaia_v.json`)
+
+For stars too faint for Gaia: G − I_E and V − I_E as cubic polynomials in
+I_E − H_E (MER 2-FWHM apertures, AB), trained on 5,043 Gaia-matched point
+sources (G 17.4–21.2; V via the Gaia DR3 Table 5.9 relation).  Robust scatter
+**σ(G) = 0.029 mag** (n = 4,517 after 3σ clipping), **σ(V) = 0.067 mag**
+(n = 4,094); round-trip median |ΔG| = 0.022, |ΔV| = 0.057.  Per colour bin:
+
+| I_E − H | n | G − I_E | V − I_E | rms G | rms V |
+|---|---:|---:|---:|---:|---:|
+| 0–0.5 | 999 | −0.21 | 0.00 | 0.07 | 0.16 |
+| 0.5–1.0 | 945 | −0.08 | +0.32 | 0.06 | 0.16 |
+| 1.0–1.5 | 1574 | +0.03 | +0.73 | 0.04 | 0.16 |
+| 1.5–2.0 | 750 | +0.10 | +1.10 | 0.12 | 0.29 |
+| 2.0–2.5 | 34 | +0.14 | +1.44 | 0.17 | 0.49 |
+
+I_E (VIS, 550–900 nm) sits between G and the NIR, so G ≈ I_E to ±0.2 across
+the K/M sequence and the colour term is small; V needs the colour and is
+good to ~0.15 mag for I_E − H < 1.5, degrading for the reddest dwarfs where
+V is 1–1.5 mag fainter than I_E.  `euclid_g_v(I_E, H)` applies it;
+`star_velocity_plot.py` falls back to it for stars without Gaia G.
+Empirical G − H_E(AB) for the same stars: −0.2 / +0.4 / +1.1 / +1.5 / +1.8 at
+BP−RP 0.5–1 / 1–1.5 / 1.5–2 / 2–2.5 / 2.5–3 (fit G − H = −2.11 + 2.56x − 0.41x²).
+
+DR1 scaling (assumptions stated in the reply of 2026-09-17): 68,300 spectra
+deg⁻² in Q1 × ~1,900 deg² → ~1.3 × 10⁸ spectra, ~13.5 TB of SIR files,
+~300 CPU-days for the 3-class engine at 0.2 s per object.

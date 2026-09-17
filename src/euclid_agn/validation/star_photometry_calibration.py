@@ -70,7 +70,9 @@ def fit_relation(colour: np.ndarray, target: np.ndarray, degree: int = 3, clip: 
         if new.sum() == keep.sum():
             break
         keep = new
-    return p, float(sigma), int(keep.sum()), resid
+    full = np.full(colour.size, np.nan)
+    full[ok] = resid  # residuals aligned with the input rows
+    return p, float(sigma), int(keep.sum()), full
 
 
 def euclid_g_v(I_E, H_E, coefficients: dict | None = None) -> tuple[np.ndarray, np.ndarray]:
@@ -89,15 +91,19 @@ def main(argv=None) -> None:
     parser.add_argument("--stars", type=Path, default=Path("outputs/star_truth.parquet"))
     parser.add_argument("--out", type=Path, default=COEF_PATH)
     parser.add_argument("--degree", type=int, default=3)
+    parser.add_argument("--from-cache", action="store_true", help="reuse outputs/star_photometry_training.parquet")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    stars = pd.read_parquet(args.stars)
-    mer = mer_photometry(stars.object_id)
-    gaia = gaia_photometry(stars.gaia_id)
-    t = stars[["object_id", "gaia_id", "point_like_prob"]].merge(mer, on="object_id").merge(gaia, on="gaia_id")
-    t = t[t.point_like_prob > 0.99]
-    t["colour"] = t.I_E - t.H_E
-    t.to_parquet("outputs/star_photometry_training.parquet", index=False)
+    if args.from_cache:
+        t = pd.read_parquet("outputs/star_photometry_training.parquet")
+    else:
+        stars = pd.read_parquet(args.stars)
+        mer = mer_photometry(stars.object_id)
+        gaia = gaia_photometry(stars.gaia_id)
+        t = stars[["object_id", "gaia_id", "point_like_prob"]].merge(mer, on="object_id").merge(gaia, on="gaia_id")
+        t = t[t.point_like_prob > 0.99]
+        t["colour"] = t.I_E - t.H_E
+        t.to_parquet("outputs/star_photometry_training.parquet", index=False)
     pG, sG, nG, rG = fit_relation(t.colour.values, (t.G - t.I_E).values, args.degree)
     pV, sV, nV, rV = fit_relation(t.colour.values, (t.V - t.I_E).values, args.degree)
     lo, hi = np.nanpercentile(t.colour, [1, 99])
@@ -111,7 +117,8 @@ def main(argv=None) -> None:
     for c0, c1 in ((0, 0.5), (0.5, 1.0), (1.0, 1.5), (1.5, 2.0), (2.0, 2.5), (2.5, 3.5)):
         s = t[(t.colour >= c0) & (t.colour < c1)]
         if len(s) > 10:
-            print(f"  I_E-H {c0}-{c1}: n={len(s):4d}  median G-I_E {np.median(s.G - s.I_E):+.2f}  V-I_E {np.nanmedian(s.V - s.I_E):+.2f}  resid rms G {np.std(rG[(t.colour >= c0).values & (t.colour < c1).values]):.3f}")
+            sel = ((t.colour >= c0) & (t.colour < c1)).values
+            print(f"  I_E-H {c0}-{c1}: n={len(s):4d}  median G-I_E {np.median(s.G - s.I_E):+.2f}  V-I_E {np.nanmedian(s.V - s.I_E):+.2f}  resid rms G {np.nanstd(rG[sel]):.3f}  V {np.nanstd(rV[sel]):.3f}")
     # the same stars, without using Gaia: apply the calibration and compare
     G_hat, V_hat = euclid_g_v(t.I_E.values, t.H_E.values, coef)
     print(f"round-trip: |G_hat - G| median {np.nanmedian(np.abs(G_hat - t.G)):.3f}, |V_hat - V| median {np.nanmedian(np.abs(V_hat - t.V)):.3f}")
