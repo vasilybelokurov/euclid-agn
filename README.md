@@ -36,6 +36,13 @@ pipeline agrees 3 % of the time, as it should. `plots/desi_redshift_recovery.png
 
 On a fresh holdout of 104 galaxies the numbers held: 61 % and 76 %.
 
+**Signal gate.** The most confident wrong redshifts were a neighbour's emission
+line on one grism orientation — present at 9–29 σ in one dither, absent in the
+others. A redshift-agnostic gate (strongest line-shaped feature at Δχ² > 25 and
+> 3 σ in ≥ 2 dithers) raises agreement on the passing sample to 64 % and makes
+the Redrock-style confidence margin monotonic (76 % purity above 15). It passes
+35 % of these faint ELGs; that cost is part of the selection function.
+
 **First selection function:** broad Hα injected into 38 of these real spectra,
 with a null built from 483 trials on the same spectra (off-redshift, and a
 broad component forced onto forbidden [N II]): 50 % completeness at

@@ -1083,3 +1083,64 @@ Tests: **285 offline**.  Cache: 46 files, 33 tiles, ~1.6 GB.
    injected) so the Stage-1 threshold is calibrated the same way.
 3. M5 dither-level fitting; first target 2684915737657679255.
 4. Stellar continuum for the bright low-z population.
+
+---
+
+## 2026-09-17 — session 9: reliability, and what "confident" was measuring
+
+### Redrock-style reliability, first attempt
+
+Adopting DESI's practice: a `zwarn` bitmask (`fit/quality.py`) and purity
+against the best-minus-runner-up statistic, read off the DESI comparisons
+(218 objects, training + holdout, production configuration).  The result was
+the opposite of Redrock's: **purity peaked at ~50 % around a margin of 10 and
+fell to 24 % above 30.**  The most confident identifications were the worst.
+
+### What confident-and-wrong was
+
+Decomposition ruled out the broad component (median 27 % of the statistic).
+The plot (`plots/confident_wrong_desi.png`) showed strong real features
+(Δχ² up to 1900) at neither DESI's Hα nor any catalogue line at DESI's
+redshift — in one object DESI's Hα is itself detected at Δχ² = 730 and loses.
+The per-dither spectra settled it (`plots/confident_wrong_dithers.png`):
+
+| object | winner's line | excess per dither (σ) |
+|---|---|---|
+| 2697190336649521081 | "Hβ" 14781 Å | 0.7, **14.5**, –, – |
+| 2688846847658475432 | "[O III]" 14673 Å | **29.1**, 4.1, 2.7 |
+| 2681252710672318871 | "He I" 17067 Å | **8.8**, 0.7, 0.9, 1.6 |
+
+A neighbour's emission line on one grism orientation.  The combined spectrum
+cannot reveal it, and it produces the *strongest* features — hence confidence
+anticorrelating with correctness.  Dither coherence is therefore required to
+trust a redshift, not only an AGN.
+
+Also found and fixed on the way: `pixel_edges` on the non-contiguous kept grid
+gave each masked gap's width to its neighbours, so line columns spanned gaps as
+straight lines (a Δχ² of 820 was built on one).  Edges now come from the full
+grid.
+
+### Stage-0 signal gate (`spectra/features.py`)
+
+Two redshift-agnostic measurements on every spectrum, before any line list:
+the strongest single-line matched-filter statistic at any pixel, and its
+excess in each dither.  Gate: feature Δχ² > 25 and > 3σ in ≥ 2 dithers.
+Quality bits `NO_FEATURE`, `INCOHERENT_DITHERS`.
+
+| DESI sample (n = 218) | n | agreement |
+|---|---:|---:|
+| all | 218 | 36 % |
+| feature, incoherent | 106 | 22 % |
+| **feature, coherent** | **77** | **64 %** |
+| no feature | 35 | 17 % |
+
+On the gated sample purity is monotonic in the margin: 71 % (> 5), 74 %
+(> 10), 76 % (> 15, n = 29).  Confident-wrong objects were 31 % coherent
+(median 1 of 3 dithers), confident-right 100 %.
+
+Cost: only 35 % of these faint ELGs pass — individual dithers are ~2× noisier
+than the co-add, so a 3σ per-dither test is stringent.  That is a completeness
+cost, recorded, not a bias by host property.  The threshold is a knob to be
+set by the selection function, not by taste.
+
+Tests: **306 offline**.
