@@ -185,6 +185,60 @@ def load_xsl_dr3_library(root: str | Path = DEFAULT_ROOT, pattern: str = "xsl_dr
     return out
 
 
+_PHOENIX_NAME = re.compile(r"lte(?P<teff>\d{5})-(?P<logg>[\d.]+)(?P<mh>[+-][\d.]+)\.PHOENIX")
+
+
+def load_phoenix_star(path: str | Path) -> Template:
+    """One PHOENIX ACES-AGSS-COND-2011 spectrum (Husser et al. 2013) -> Template.
+
+    The R = 10 000 medium-resolution product: a 1-D image on an ``AWAV-LOG``
+    grid (ln-wavelength in Angstrom, ``CRVAL1``/``CDELT1``), F_lambda in
+    erg s^-1 cm^-2 cm^-1, 3000-25000 A with no telluric gaps.  Parameters come
+    from ``PHXTEFF``, ``PHXLOGG``, ``PHXM_H``, ``PHXALPHA``.
+    """
+    from astropy.io import fits
+
+    path = Path(path)
+    with fits.open(path) as handle:
+        header = handle[0].header
+        flux = np.asarray(handle[0].data, dtype=np.float64)
+    if str(header.get("CTYPE1", "")).strip() != "AWAV-LOG":
+        raise ValueError(f"{path.name}: expected an AWAV-LOG grid, got {header.get('CTYPE1')!r}")
+    crpix = float(header.get("CRPIX1", 1.0))
+    wavelength = np.exp(float(header["CRVAL1"]) + (np.arange(flux.size) + 1 - crpix) * float(header["CDELT1"]))
+    mask = np.isfinite(flux) & (flux > 0)
+    meta = {"source": str(path), "library": "PHOENIX ACES-AGSS-COND-2011 R10000",
+            "teff": float(header.get("PHXTEFF", np.nan)), "logg": float(header.get("PHXLOGG", np.nan)),
+            "mh": float(header.get("PHXM_H", np.nan)), "alpha": float(header.get("PHXALPHA", np.nan))}
+    name = f"phoenix_T{int(meta['teff'])}_g{meta['logg']:.1f}_m{meta['mh']:+.1f}"
+    return Template(name, "STAR", wavelength, flux, mask, meta)
+
+
+def load_phoenix_library(root: str | Path = DEFAULT_ROOT, pattern: str = "phoenix/Z*/lte*.fits",
+                         teff_min: float = 3000.0, teff_max: float = 12000.0, logg_min: float = 0.0,
+                         logg_max: float = 6.0, mh_values: tuple[float, ...] | None = None,
+                         teff_step: int = 1) -> list[Template]:
+    """PHOENIX spectra under ``root`` within the parameter cuts (``teff_step`` thins the Teff grid)."""
+    out = []
+    seen_teff = {}
+    for f in sorted(Path(root).expanduser().glob(pattern)):
+        m = _PHOENIX_NAME.match(f.name)
+        if not m:
+            continue
+        teff, logg, mh = float(m["teff"]), float(m["logg"]), float(m["mh"])
+        if not (teff_min <= teff <= teff_max and logg_min <= logg <= logg_max):
+            continue
+        if mh_values is not None and not any(abs(mh - v) < 0.01 for v in mh_values):
+            continue
+        idx = seen_teff.setdefault(teff, len(seen_teff))
+        if idx % teff_step:
+            continue
+        out.append(load_phoenix_star(f))
+    if not out:
+        raise FileNotFoundError(f"no PHOENIX spectra under {root}/{pattern}")
+    return out
+
+
 def load_glikman_composite(path: str | Path = DEFAULT_ROOT / "qso" / "table7.dat", geometric: bool = False) -> Template:
     """Glikman et al. 2006 optical-to-infrared quasar composite (VizieR J/ApJ/640/579, table7)."""
     # whitespace-separated: wavelength [A], arithmetic mean, error, geometric mean

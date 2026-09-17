@@ -24,7 +24,13 @@ import pandas as pd
 
 from euclid_agn.fit.classify import RedshiftEngine, default_specs
 from euclid_agn.fit.screen import ScreenSettings, prepare
-from euclid_agn.models.library import build_pca_basis, load_glikman_composite, load_xsl_dr3_library, load_xsl_ssp_library
+from euclid_agn.models.library import (
+    build_pca_basis,
+    load_glikman_composite,
+    load_phoenix_library,
+    load_xsl_dr3_library,
+    load_xsl_ssp_library,
+)
 from euclid_agn.spectra.coherence import dither_variance_rescale
 from euclid_agn.validation.continuum_experiments import DEFAULT_CACHE, iter_spectra, load_sample, pca_templates
 
@@ -47,6 +53,11 @@ def build_engine(wavelength, bin_width, star_source: str = "xsl") -> RedshiftEng
     qso = [load_glikman_composite()]
     if star_source == "xsl":
         stars = pca_templates(build_pca_basis(load_xsl_dr3_library(), n_components=8, wmin=6000, wmax=19500))
+    elif star_source == "phoenix":
+        # PCA of the gap-free PHOENIX grid (Teff 3000-12000, all log g, Z = 0 and -1): the STAR class
+        # needs shape coverage, not stellar parameters, at R ~ 450
+        lib = load_phoenix_library(mh_values=(0.0, -1.0), teff_step=2)
+        stars = pca_templates(build_pca_basis(lib, n_components=8, wmin=6000, wmax=19500))
     else:
         raise ValueError(star_source)
     specs = default_specs(galaxy, qso, stars, galaxy_nonnegative=True, z_max_galaxy=2.0, z_max_qso=3.3)

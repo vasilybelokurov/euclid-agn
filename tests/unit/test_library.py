@@ -145,3 +145,19 @@ def test_smoothing_cache_is_per_instance_not_per_id():
     _, cb = smoothed_cumulative(b, 1e-3)
     assert np.allclose(cb, 2 * ca)
     assert "_smoothed_cache" in a.__dict__ and "_smoothed_cache" in b.__dict__
+
+
+HAVE_PHOENIX = any(Path(DEFAULT_ROOT).glob("phoenix/Z*/lte*.fits"))
+
+
+@pytest.mark.skipif(not HAVE_PHOENIX, reason="PHOENIX R10000 grid not downloaded")
+def test_phoenix_star_loads_on_a_log_grid_without_gaps():
+    from euclid_agn.models.library import load_phoenix_library, load_phoenix_star
+
+    f = sorted(Path(DEFAULT_ROOT).glob("phoenix/Z*/lte05500-4.50*.fits"))[0]
+    t = load_phoenix_star(f)
+    assert t.kind == "STAR" and abs(t.wavelength[0] - 3000.0) < 0.5 and 24900 < t.wavelength[-1] < 25100
+    assert np.allclose(np.diff(np.log(t.wavelength)), 1e-5, rtol=1e-6)
+    assert t.mask.all() and t.metadata["teff"] == 5500.0 and t.metadata["logg"] == 4.5
+    lib = load_phoenix_library(teff_min=5000, teff_max=5200, mh_values=(0.0,))
+    assert all(5000 <= x.metadata["teff"] <= 5200 for x in lib) and len(lib) >= 5
