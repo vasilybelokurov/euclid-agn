@@ -14,6 +14,11 @@ mkdir -p "$OUT"
 for z in -0.0 -0.5 -1.0 -2.0; do
   [ -d "$PHX/Z$z" ] || unzip -o -q "$PHX/PHOENIX-ACES-AGSS-COND-2011_R10000FITS_Z$z.zip" -d "$PHX/Z$z"
 done
+# one alpha-enhanced bundle so [alpha/M] spans a range: rvspecfit's CCF builder normalises every grid
+# parameter to [0, 1] and asserts on a zero-range parameter, and the parameter count must match the DB
+A="PHOENIX-ACES-AGSS-COND-2011_R10000FITS_Z-1.0.Alpha=+0.40.zip"
+[ -f "$PHX/$A" ] || curl -sS -L -C - -o "$PHX/$A" "https://phoenix.astro.physik.uni-goettingen.de/data/MedResFITS/R10000FITS/$A"
+[ -d "$PHX/Z-1.0.Alpha=+0.40" ] || unzip -o -q "$PHX/$A" -d "$PHX/Z-1.0.Alpha=+0.40"
 # wavelength vector of the AWAV-LOG grid (identical for every file), as the FITS array rvspecfit expects
 python - <<'PY'
 import glob, numpy as np
@@ -26,8 +31,8 @@ lam = np.exp(h["CRVAL1"] + (np.arange(h["NAXIS1"]) + 1 - h.get("CRPIX1", 1.0)) *
 fits.PrimaryHDU(lam.astype(np.float64)).writeto(phx / "WAVE_PHOENIX_R10000.fits", overwrite=True)
 print("wavefile", lam[0], lam[-1], lam.size)
 PY
-[ -f "$OUT/files.db" ] || rvs_read_grid --prefix "$PHX/" --glob_mask "Z*/lte*.fits" --templdb "$OUT/files.db"  # rvspecfit concatenates prefix+mask: trailing slash required
-rvs_make_interpol --setup nisp_red --lambda0 11800 --lambda1 19100 --resol_func "x/32.3" --step 6.7 --parameter_names teff,logg,feh \
+rm -f "$OUT/files.db"; rvs_read_grid --prefix "$PHX/" --glob_mask "Z*/lte*.fits" --templdb "$OUT/files.db"  # rvspecfit concatenates prefix+mask: trailing slash required
+rvs_make_interpol --setup nisp_red --lambda0 11800 --lambda1 19100 --resol_func "x/32.3" --step 6.7 \
   --templdb "$OUT/files.db" --templprefix "$PHX" --wavefile "$PHX/WAVE_PHOENIX_R10000.fits" \
   --oprefix "$OUT/templ_data" --nthreads 8
 rvs_make_nd --prefix "$OUT/templ_data" --setup nisp_red
