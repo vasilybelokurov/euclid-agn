@@ -2065,3 +2065,41 @@ Caveat on the control: 178 of its 208 objects are an EDF-N field at b = +31°,
 against b = −47° for NGC 1527; the same-region control (tile 102021017,
 b = −46°) gives 96 % within ±300 km/s from 28 objects.
 `plots/ngc1527_velocity_by_radius.png`.
+
+### Correction: the formal-error cut admitted railed fits
+
+rvspecfit reports a *small* formal error for velocities parked at the search
+boundary — 23 of the 54 railed inner-region fits passed σ_v < 200 km/s, one
+with σ_v = 0.0 km/s at v = −3000.  Honest non-railed fits have a median error
+of 820 km/s, so the cut preferentially selected junk.  Re-analysed requiring
+|v| < 2900 as well:
+
+| sample | n | \|v\| < 300 | in 900–1600 km/s |
+|---|---:|---:|---:|
+| NGC 1527, 0–3′ | 21 | 38 % | 1 (4.8 %) |
+| NGC 1527, 3–10′ | 95 | **83 %** | 1 (1.1 %) |
+| control | 201 | 88 % | 3 (1.5 %) |
+
+The earlier 61 % vs 85 % comparison was distorted by railed junk: outside the
+optical body the field is statistically identical to a blank field (83 % vs
+88 %).  The non-detection stands and is now on honest numbers (1/95 vs 3/201,
+Fisher p = 1.00).
+
+**Why the inner spectra fail is *not* a wavelength-scale error.**  In slitless
+spectroscopy wavelength is set by source position — one NISP pixel = 13.4 Å =
+259 km/s = 0.30″, so a 1″ centroid error would be 863 km/s.  Tested directly:
+velocity versus offset from the galaxy centre gives r = +0.10 (dx) and +0.16
+(dy) with a slope of +2 km/s per arcsec, and the railed objects split evenly
+between +3000 and −3000 on both sides.  There is no coherent positional shift
+— expected, since the four dithers use different grism orientations, so a
+positional offset produces different shifts per dither that average out.  The
+inner spectra are *incoherently* contaminated: the absorption features that
+carry velocity are destroyed, the fit is unconstrained, and it rails.  Nothing
+is measured, rather than something measured wrongly.
+
+**Power of the experiment, stated plainly**: ~3 GCs brighter than M_V = −10.5
+are expected among the 95 clean-zone objects (3 %), against a 1.5 % control
+rate in the same velocity window — ≈ 1.4 expected background events.  Even a
+perfect measurement of all three clusters would give Poisson p ≈ 0.2.  The
+test could not have succeeded; that is a statement about Q1 depth and GC
+luminosity functions, not about the pipeline.
