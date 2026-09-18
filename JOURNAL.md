@@ -2103,3 +2103,37 @@ rate in the same velocity window — ≈ 1.4 expected background events.  Even a
 perfect measurement of all three clusters would give Poisson p ≈ 0.2.  The
 test could not have succeeded; that is a statement about Q1 depth and GC
 luminosity functions, not about the pipeline.
+
+### Resolved (extended) sources in the NGC 1527 field
+
+rvspecfit cannot be used on them — its template library carries the
+point-source LSF (R = λ/32.3 Å) while these objects have effective LSF σ =
+20–120 Å — so they are measured with our own archetype engine, which builds a
+template cube per LSF bucket (`validation/extended_velocities.py`, two passes:
+wide 0 < z < 1 at 300 km/s to separate local from background, then a joint
+continuum+line scan at 50 km/s for anything below z = 0.03).  282 candidates
+(LSF σ ≥ 20 Å, S/N > 10) within 10′ of the host, 146 in the control fields.
+
+**Velocity precision on resolved sources, calibrated against DESI** (228 low-z
+galaxies where our redshift is correct): robust σ = **229 km/s at S/N > 50**,
+600 km/s at S/N 20–50, 807 km/s below — **unbiased** (median residual
+−3 km/s).  So the engine *is* capable of separating 1176 km/s from zero at
+5 σ, provided the source has S/N > 50.
+
+**Result** (`plots/ngc1527_extended_velocities.png`): 86 % of resolved sources
+are background galaxies (z ≈ 0.1–0.5, indistinguishable from the control
+field).  Of the 37 the wide scan places below z = 0.03, 23 are parked at a
+grid edge (v = 0 or 9033 km/s) and only 8 carry real redshift evidence
+(Δχ² > 9).  Three fall in the 900–1600 km/s window against 0 in the control
+(Fisher p = 0.55), but two have Δχ² of 0.43 and 0.00 — no evidence at all —
+and the third, a S/N 105 source 1.5′ out with v = 1052 km/s and
+Δχ²_lines = 40, has a spectrum with flux steps from 22 to 9 ×10⁻¹⁷ at
+13900 Å and back at 16500 Å (`plots/ngc1527_extended_candidate.png`): the
+"lines" and the velocity are extraction artefacts.
+
+So the resolved sample gives no detection either, for a different reason than
+the point sources: not contamination-induced railing, but that the field
+simply contains no bright resolved satellite of NGC 1527 in Q1's spectra.
+The useful product is the calibrated resolved-source velocity precision
+(229 km/s at S/N > 50, unbiased), which is a number the AGN work needs
+directly and which we did not have before.
