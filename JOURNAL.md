@@ -2045,3 +2045,23 @@ HTTP 502/504 for every cone between 18:30 and 19:13.  No point retrying — all
 are at 17–33 Mpc, i.e. further than NGC 1527, so they carry fewer usable
 clusters at the same contamination level.  If the test is ever revisited it
 needs a host at D ≲ 5 Mpc (none in the Q1 fields) or DR1's wider footprint.
+
+**Contamination is radial, and confined to the optical body.**  Splitting the
+143 good fits by separation from NGC 1527 (D25 = 4.5′):
+
+| separation | n | railed ±3000 | \|v\| < 300 |
+|---|---:|---:|---:|
+| 0–3′ | 44 | **52 %** | 18 % |
+| 3–6′ | 38 | 8 % | 79 % |
+| 6–10′ | 61 | **2 %** | 80 % |
+| control, same field (EDF-S, b = −46°) | 28 | 0 % | 96 % |
+
+The 19 % field-average railing comes entirely from inside the galaxy.  Beyond
+3′ Euclid's spectra are as usable as in a blank field — so proximity to a
+bright host is not by itself disqualifying for the dwarf-AGN search; being
+*inside* the host's optical extent is.  It also condemns candidate A (2.0′,
+52 % railing zone) while candidate B (8.5′) fails on its own edge artefact.
+Caveat on the control: 178 of its 208 objects are an EDF-N field at b = +31°,
+against b = −47° for NGC 1527; the same-region control (tile 102021017,
+b = −46°) gives 96 % within ±300 km/s from 28 objects.
+`plots/ngc1527_velocity_by_radius.png`.
