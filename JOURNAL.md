@@ -2180,3 +2180,50 @@ bounded by normal flux, ≥ 500 Å wide, not touching an edge), with a new
 median χ²ᵣ = 2.5 against 0.98 for clean ones.  This is a concrete gain for the
 AGN search, where a rectangular deficit across the band would wreck a
 broad-line measurement in any host with a bright neighbour.
+
+### A real bug, found by looking at the gallery: the archive LSF over-smooths our templates
+
+The first gallery showed models running straight through obvious absorption
+features.  Chased down quantitatively on the twelve brightest clean-zone
+objects: the data carry 0.6–1.9 % narrow structure while **our models carried
+0.00–0.29 %** — effectively featureless — with individual dips reaching −19 σ.
+
+Diagnosis, in order:
+1. *Is the structure real?*  Stacking 236 continuum-normalised spectra in the
+   observed frame shows only 1–2 % *common* features (14888, 15022, 13133 Å …
+   at 4–8 σ in the median), so the per-object structure is not a shared
+   calibration pattern.  Per object, the structure has a correlation length of
+   1–3 pixels and repeats between dithers with r = 0.90–1.00, so it is signal,
+   not photon noise.
+2. *Why is the model smooth?*  Every one of those objects has header
+   `LSF_SIG` = 45–73 Å, and we smooth the templates by it — FWHM 110–170 Å,
+   which erases all stellar features.
+3. *What width do the data want?*  Scanning the template smoothing width:
+
+   | object | header LSF | best LSF | χ²ᵣ (header) | χ²ᵣ (best) |
+   |---|---:|---:|---:|---:|
+   | −619419693480225144 | 63 Å | 14 Å | 1.31 | 0.76 |
+   | −619857270478167031 | 69 Å | 10 Å | 4.95 | 2.84 |
+   | −620884294478453080 | 69 Å | 10 Å | 6.27 | 2.94 |
+   | −620518401479614289 | 67 Å | 10 Å | 1.35 | 0.69 |
+
+So **`LSF_SIG` is not usable as a template smoothing width.**  Whatever it
+measures (it tracks the source's extent, and these objects sit on NGC 1527's
+light), the spectra themselves are resolved at close to the instrumental
+value.  The grid is clamped at 13.7 Å, NISP's nominal point-source LSF,
+because nothing on the sky is sharper than the instrument; fits do keep
+improving below that, which is a warning that pixel-scale resampling
+residuals exist, not a licence to fit them.
+
+Effect on the same 36 objects: median χ²ᵣ **2.98 → 1.63**, unfitted > 4 σ dips
+per object **4 → 2**, objects with no unfitted dip **13 % → 33 %**, median
+fitted LSF 14 Å against a header median of 62 Å.  Visually the models now
+trace the absorption (`plots/gallery_ngc1527_fitlsf/` versus
+`plots/gallery_ngc1527_headerlsf/`).
+
+`fit_lsf` is now an option of both the gallery and `GalaxyEngine`, and the
+gallery marks every absorption feature the model misses by more than 4 σ with
+a blue triangle, so the failure mode is visible rather than buried in a
+summary statistic.  **The DESI low-z revalidation with the fitted LSF is
+running — the 46.6 % baseline was obtained with the over-smoothed templates,
+so it may be an underestimate of what the engine can do.**

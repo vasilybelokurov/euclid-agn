@@ -77,9 +77,15 @@ def bic(result: JointScanResult) -> float:
 class GalaxyEngine:
     """Run models A and B and choose."""
 
+    #: Template smoothing widths tried when ``fit_lsf`` is on.  The archive's LSF_SIG is not a
+    #: usable smoothing width - on bright Q1 sources it reads 50-100 A where the data are best
+    #: fitted at 14-17 A, which erases every absorption feature from the model.  The grid starts
+    #: at NISP's nominal point-source LSF because nothing on the sky is sharper than the instrument.
+    LSF_GRID: tuple[float, ...] = (13.7, 17.0, 22.0, 30.0, 45.0, 65.0, 90.0)
+
     def __init__(self, store: CubeStore, n_knots: int = 12, multiplicative_degree: int = 3,
                  min_continuum_snr: float = 0.0, snr_switch: float = 5.0, snr_continuum: float = 8.0,
-                 separation_kms: float = 3000.0, agreement_kms: float = 3000.0):
+                 separation_kms: float = 3000.0, agreement_kms: float = 3000.0, fit_lsf: bool = False):
         self.store = store
         self.n_knots = n_knots
         self.multiplicative_degree = multiplicative_degree
@@ -91,6 +97,7 @@ class GalaxyEngine:
         self.snr_continuum = snr_continuum  # above this, the continuum model is used regardless of margins
         self.separation_kms = separation_kms
         self.agreement_kms = agreement_kms
+        self.fit_lsf = fit_lsf
 
     def run(self, observation, z_prior: float | None = None) -> GalaxyRedshift | None:
         # model B's variance (dither scatter) is used for both models so BIC compares like with like
@@ -98,18 +105,23 @@ class GalaxyEngine:
         proj_a = prepare(spectrum, ScreenSettings(n_knots=self.n_knots, outlier_threshold=5.0))
         if proj_a is None:
             return None
-        cube = self.store.get("GALAXY", spectrum.lsf_sigma)
+        widths = [w for w in self.LSF_GRID if w <= max(spectrum.lsf_sigma, self.LSF_GRID[0])] if self.fit_lsf else [spectrum.lsf_sigma]
+        cube = self.store.get("GALAXY", widths[0])
         a = joint_scan(spectrum, proj_a, None, grid_z=cube.grid_z, spline_nuisance=True, z_prior=z_prior,
                        separation_kms=self.separation_kms)
         b = None
+        self.last_lsf = float("nan")
         keep = np.isin(spectrum.wavelength, proj_a.wavelength)
         snr = float(np.nanmedian(spectrum.flux[keep] * proj_a.weight))
         if snr >= self.min_continuum_snr:
             proj_b = prepare(spectrum, ScreenSettings(n_knots=1, outlier_threshold=5.0))
             if proj_b is not None:
-                b = joint_scan(spectrum, proj_b, cube, poly_degree=0, nonnegative=True,
-                               multiplicative_degree=self.multiplicative_degree, z_prior=z_prior,
-                               separation_kms=self.separation_kms)
+                for width in widths:
+                    trial = joint_scan(spectrum, proj_b, self.store.get("GALAXY", width), poly_degree=0,
+                                       nonnegative=True, multiplicative_degree=self.multiplicative_degree,
+                                       z_prior=z_prior, separation_kms=self.separation_kms)
+                    if trial is not None and (b is None or trial.chi2 < b.chi2):
+                        b, self.last_lsf = trial, width
         if a is None and b is None:
             return None
         bic_a = bic(a) if a is not None else np.inf

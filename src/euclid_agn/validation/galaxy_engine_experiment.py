@@ -26,7 +26,7 @@ log = logging.getLogger(__name__)
 
 
 def run(sample: pd.DataFrame, z_max: float = 2.0, step_kms: float = 300.0, archetype_step: int = 6,
-        cache: Path = DEFAULT_CACHE) -> pd.DataFrame:
+        cache: Path = DEFAULT_CACHE, fit_lsf: bool = False) -> pd.DataFrame:
     lib = load_xsl_ssp_library(log_age_min=8.5, mh_min=-0.5)[::archetype_step]
     engine = None
     rows = []
@@ -34,13 +34,15 @@ def run(sample: pd.DataFrame, z_max: float = 2.0, step_kms: float = 300.0, arche
     for row, spectrum, obs in iter_spectra(sample, cache, with_dithers=True):
         if engine is None:
             store = CubeStore({"GALAXY": lib}, redshift_grid(0.0, z_max, step_kms), spectrum.wavelength, spectrum.bin_width)
-            engine = GalaxyEngine(store)
+            engine = GalaxyEngine(store, fit_lsf=fit_lsf)
         res = engine.run(obs, z_prior=float(row.get("phz_median", np.nan)))
         if res is None:
             continue
         out = {"object_id": int(row["object_id"]), "desi_z": float(row["desi_z"]),
                "snr": float(row.get("median_snr_per_pixel", np.nan)), "phz": float(row.get("phz_median", np.nan))}
         out.update(res.as_row())
+        out["lsf_fitted"] = getattr(engine, "last_lsf", np.nan)
+        out["lsf_header"] = float(spectrum.lsf_sigma)
         for key in ("gal_z", "gal_z_prior", "gal_z_lines", "gal_z_continuum"):
             out[f"ok_{key[4:]}"] = bool(abs(out[key] - out["desi_z"]) / (1 + out["desi_z"]) < 0.01) if np.isfinite(out[key]) else False
         rows.append(out)
@@ -64,12 +66,13 @@ def main(argv=None) -> None:
     parser.add_argument("--z-max", type=float, default=2.0)
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--fit-lsf", action="store_true", help="choose the template smoothing width per object")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     sample = load_sample(args.sample)
     if args.limit:
         sample = sample.iloc[: args.limit]
-    table = run(sample, z_max=args.z_max)
+    table = run(sample, z_max=args.z_max, fit_lsf=args.fit_lsf)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     table.to_parquet(args.out, index=False)
     print(summarise(table))
