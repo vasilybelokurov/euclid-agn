@@ -2227,3 +2227,25 @@ a blue triangle, so the failure mode is visible rather than buried in a
 summary statistic.  **The DESI low-z revalidation with the fitted LSF is
 running — the 46.6 % baseline was obtained with the over-smoothed templates,
 so it may be an underestimate of what the engine can do.**
+
+**What the LSF fix does and does not buy** (DESI low-z sample, 489 galaxies,
+`outputs/galaxy_engine_lowz_fitlsf.parquet`):
+
+| | header LSF | fitted LSF |
+|---|---:|---:|
+| agreement with DESI, engine + prior | 46.6 % | 45.4 % |
+| velocity residual where both are correct (n = 215) | 280 km/s | **230 km/s** |
+| median smoothing width used | 27 Å | 22 Å |
+
+7 objects are fixed and 13 broken — a wash at n = 489.  So the over-smoothing
+was a genuine defect of the *model* (featureless templates, χ² doubled) and it
+costs **velocity precision**, but it does not change the redshift
+identification rate: identification at a 0.01(1+z) tolerance rides on the
+broad continuum shape, while the narrow features set the precision.  Sharper
+templates can also lock onto pixel-scale residuals at the wrong redshift,
+which is presumably why the identification rate does not improve.
+
+The size of the error depends on environment: in blank fields the header is
+only mildly inflated (27 Å where the data want 22 Å), but around NGC 1527 it
+reads 62 Å where the data want 14 Å.  `LSF_SIG` appears to be inflated by a
+bright neighbour's light, which is exactly where it does most damage.
