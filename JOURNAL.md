@@ -2273,3 +2273,23 @@ objects, none of them near 1176 km/s, there is nothing to detect.
 With the fitted LSF the resolved velocities do improve — control \|v\| < 300
 rises from 50 % to 69 %, median reduced χ² 0.72 in the host field — but the
 sample size, not the precision, is what defeats the measurement.
+
+**Full gallery with the fitted LSF** (`plots/gallery_ngc1527/`, 665 panels, 56
+pages, 448 unresolved + 217 resolved, S/N > 10):
+
+| | header LSF | fitted LSF |
+|---|---:|---:|
+| median reduced χ² | 0.70 | 0.67 |
+| unfitted > 4 σ absorption dips per object | median 4 | **median 0** |
+| objects with no unfitted dip | 13 % | **74 %** |
+
+What still carries the ✗ flag is broken data rather than a failed model —
+flux steps and decontamination troughs.
+
+Caveat on the fitted width: across the whole sample the preferred LSF median
+is 30 Å against a header median of 16 Å, the *opposite* direction from the
+bright objects (63 → 14 Å).  For faint spectra a broader kernel wins because
+a smoother model does not chase noise, so there the width acts as a
+regularisation knob, not a resolution measurement.  The defensible statement
+is that `LSF_SIG` is unreliable in both directions and the width should be
+fitted, with the instrumental floor imposed.
