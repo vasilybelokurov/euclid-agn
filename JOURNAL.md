@@ -2293,3 +2293,51 @@ a smoother model does not chase noise, so there the width acts as a
 regularisation knob, not a resolution measurement.  The defensible statement
 is that `LSF_SIG` is unreliable in both directions and the width should be
 fitted, with the instrumental floor imposed.
+
+### A 12.8σ "detection" that was an artefact pile-up — and the cut that kills it
+
+The inner-3′ unresolved panel shows a bump at ~700 km/s: **4 of 21 objects in
+450–900 km/s against a control rate of 1.5 %** (0.31 expected) — a 12.8×
+overdensity, Poisson p = 0.0003, Fisher p = 0.002.  It is entirely spurious:
+
+| object | sep | S/N | v (km/s) | trough | largest pixel jump |
+|---|---:|---:|---:|---|---:|
+| −620995641479320082 | 2.1′ | 25 | 674 ± 92 | yes | 18× |
+| −621229091479302307 | 2.2′ | 15 | 686 ± 60 | no | 79× |
+| −621217271479233254 | 1.8′ | 55 | 664 ± 152 | yes | 43× |
+| −620947129478634764 | 2.0′ | 24 | 772 ± 192 | yes | 40× |
+
+The tell is that four independent objects agree to 50 km/s while their own
+formal errors are 60–192 km/s.  Three share a sharp edge at ~18908 Å and
+three have troughs spanning ~14.7–16.2 kÅ: when the fitter aligns template
+features to an artefact edge at a *fixed observed* wavelength, every object
+carrying that edge inherits the same spurious velocity.  Artefacts do not
+scatter — they cluster, and clustering is exactly what a detection looks like.
+
+**The cut works.**  Two template-free shape tests — `continuum_trough` plus a
+largest-single-pixel-jump > 10× median criterion:
+
+| sample | n | survive | in 450–900 km/s |
+|---|---:|---:|---:|
+| NGC 1527 0–3′ | 21 | 5 (24 %) | **4 → 0** |
+| NGC 1527 3–10′ | 95 | 94 (99 %) | 3 → 3 |
+| control | 201 | 197 (98 %) | 3 → 3 |
+
+Artefact rate 76 % inside 3′ against 1 % outside and 2 % in blank fields.  The
+cut removes the false signal and leaves clean data untouched.  Flagged tables:
+`outputs/gc_velocities_ngc1527_flagged.parquet`,
+`outputs/control_velocities_flagged.parquet`.
+
+**Carry this into the AGN search**: a velocity or redshift pile-up can be
+manufactured by shared artefacts at fixed observed wavelengths, and it will
+look statistically overwhelming.  Every clustering or line-offset claim must
+pass the artefact cut before it is believed.
+
+### Why Q1 object IDs are negative in the southern fields
+
+`object_id` encodes the source position and carries the declination sign.
+Checked on all 5,506 cached objects: every negative id has dec < 0 and every
+positive id dec > 0, no exceptions — EDF-N (dec +63…+65) gives ids ≈ 2.7×10¹⁸,
+EDF-S/F (dec −51…−28) give ≈ −5×10¹⁷…−6×10¹⁷.  NGC 1527 is in EDF-S, hence the
+minus signs throughout this session.  Ids must stay int64: float64 silently
+corrupts 19-digit values (a bug already hit and fixed in session 10).
