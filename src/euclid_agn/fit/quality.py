@@ -48,6 +48,7 @@ class ZWarn(IntFlag):
     NO_FEATURE = 1024  # no line-shaped feature anywhere, redshift-agnostic
     AMBIGUOUS_CLASS = 2048  # best class beats the runner-up class by less than the threshold
     MODELS_DISAGREE = 4096  # lines+spline and continuum+lines models give different redshifts
+    DECONTAMINATION_TROUGH = 8192  # rectangular flux deficit from over-subtracted neighbour light
 
 
 @dataclass(frozen=True)

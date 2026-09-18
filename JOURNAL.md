@@ -2137,3 +2137,46 @@ simply contains no bright resolved satellite of NGC 1527 in Q1's spectra.
 The useful product is the calibrated resolved-source velocity precision
 (229 km/s at S/N > 50, unbiased), which is a number the AGN work needs
 directly and which we did not have before.
+
+### Fit gallery, and a decontamination artefact found through it
+
+`validation/fit_gallery.py` renders every measured spectrum with the model we
+fitted to it — one panel each carrying S/N, LSF width, winning class, velocity
+or redshift, Δχ² and reduced χ², sorted by S/N, twelve to a page.  The model is
+re-solved at the best redshift by the new
+`fit.template_cube.best_fit_model`, which reproduces the scan's χ² to 2 %
+(tested); it exists because the multiplicative continuum polynomial is solved
+by alternation and its factor is not part of the stored coefficient vector.
+
+NGC 1527 field, 700 highest-S/N objects (348 unresolved, 235 resolved):
+**665 panels on 56 pages**, `plots/gallery_ngc1527/gallery.pdf` plus the first
+six pages as PNG and an index parquet.  441 fitted best as GALAXY, 224 as
+STAR; **median reduced χ² = 0.70** — the dither-scatter variance puts χ² on an
+honest scale — and only 18 (3 %) exceed χ²ᵣ = 20.
+
+Reading the pages turned up a recurring artefact invisible in summary
+statistics: a **rectangular flux deficit** between ~13800 and ~16800 Å with
+normal flux on both sides.  Quantified (median flux 14300–16300 Å over the
+median outside, factor-of-two threshold):
+
+| | fraction with the trough |
+|---|---:|
+| NGC 1527, 0–3′ | **51 %** (60/117) |
+| NGC 1527, 3–6′ | 0 % (0/46) |
+| NGC 1527, 6–10′ | 1 % (1/70) |
+| blank control fields | **0 %** (0/241) |
+
+It is the SIR decontamination step removing far too much flux over the range
+where the bright neighbour's trace crosses the object's own.  It is confined
+to exactly the radius where velocity fits rail, so this single failure mode
+accounts for the inner-region results reported above — not "contamination" in
+the vague sense but an identifiable, diagnosable defect.
+
+`spectra/artefacts.py::continuum_trough` detects it template-free from the
+spectrum shape (longest contiguous stretch below half the median level,
+bounded by normal flux, ≥ 500 Å wide, not touching an edge), with a new
+`ZWarn.DECONTAMINATION_TROUGH` bit.  Validated on 300 gallery objects: flags
+20 % overall, 39 % / 0 % / 2 % at 0–3′ / 3–6′ / 6–10′, and flagged objects have
+median χ²ᵣ = 2.5 against 0.98 for clean ones.  This is a concrete gain for the
+AGN search, where a rectangular deficit across the band would wreck a
+broad-line measurement in any host with a bright neighbour.
