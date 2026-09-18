@@ -18,3 +18,6 @@ data/cache/
 # frozen fixture deliberately.
 *.fits
 !tests/data/*.fits
+
+# Multi-page fit galleries: regenerable with `python -m euclid_agn.validation.fit_gallery`
+plots/gallery_*/gallery.pdf
