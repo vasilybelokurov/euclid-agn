@@ -2341,3 +2341,51 @@ positive id dec > 0, no exceptions — EDF-N (dec +63…+65) gives ids ≈ 2.7×
 EDF-S/F (dec −51…−28) give ≈ −5×10¹⁷…−6×10¹⁷.  NGC 1527 is in EDF-S, hence the
 minus signs throughout this session.  Ids must stay int64: float64 silently
 corrupts 19-digit values (a bug already hit and fixed in session 10).
+
+## Known quasars in Q1: the QSO class validated against DESI DR1
+
+Truth from WSDB: `desi_dr1.zpix` (zwarn = 0) joined to `desi_dr1.photometry`
+for positions.  **6,432 DESI quasars inside the EDF-N cone** (z = 0.05–5.82,
+5,191 above z = 0.9); DESI does not cover the southern deep fields.  Matched
+to the local SIR cache by position (`validation/qso_truth.py`, positions read
+from META HDUs, no catalogue service needed): **150 quasars with Euclid
+spectra**, median separation 0.01″, z = 0.17–3.06.
+
+Fitted with the three-class engine — GALAXY archetypes, Glikman composite,
+PHOENIX stars, all non-negative, per-object fitted LSF
+(`validation/qso_experiment.py`, new `RedshiftEngine.run_at_lsf`).
+
+| | ours | Euclid SPE |
+|---|---:|---:|
+| redshift right (\|Δz\|/(1+z) < 0.01), all 149 | **44 %** | 30 % |
+| z 0–0.9 (n = 32) | **47 %** | **0 %** |
+| z 0.9–1.5 (n = 44) | **57 %** | 41 % |
+| z 1.5–2.5 (n = 59) | 37 % | 36 % |
+| z 2.5–3.5 (n = 14) | 29 % | 43 % |
+| S/N > 10 (n = 22) | **77 %** | **9 %** |
+| classified QSO | 62 % | 23 % |
+
+SPE labels 99 of 137 of these confirmed quasars **galaxies**, and gets none of
+the z < 0.9 ones right — the same low-redshift blind spot seen for galaxies.
+Our advantage is largest exactly where the AGN search lives: low redshift and
+decent S/N.  SPE is better only at z > 2.5, where the Glikman composite's
+blue end (2762 Å rest) starts leaving the grism.
+
+**Failures are line confusion, as expected**: of 83 misses, Hα↔Hβ accounts for
+17, Hα→[O III] for 7, Hα→Pa-β for 4; 11 rail at z = 0.
+
+**The margins work.**  Median redshift margin 132 for correct against 7 for
+wrong; class margin 222 against 11.  Purity rises monotonically:
+
+| Δχ² cut | kept | ours right | SPE right on the same objects |
+|---:|---:|---:|---:|
+| 0 | 100 % | 44 % | 30 % |
+| 25 | 44 % | 64 % | 42 % |
+| 100 | 30 % | 78 % | 53 % |
+
+and requiring the QSO class as well: **Δχ² > 25 and class = QSO gives 81 %
+purity for 35 % of the sample; Δχ² > 100 gives 97 % for 24 %.**  That is a
+usable AGN selection with a measured selection function — the thing M6 needs.
+
+The trough flag matters here too: 8 % of the quasars are flagged, and their
+redshifts are right 25 % of the time against 46 % for the clean ones.

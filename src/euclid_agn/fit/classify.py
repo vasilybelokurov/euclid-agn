@@ -84,17 +84,23 @@ class RedshiftEngine:
         self.min_delta_chi2 = min_delta_chi2
         self.min_delta_chi2_class = min_delta_chi2_class
 
-    def scan_class(self, kind: str, spectrum, projected, z_prior: float | None = None) -> ContinuumScanResult | None:
+    def scan_class(self, kind: str, spectrum, projected, z_prior: float | None = None,
+                   lsf_override: float | None = None) -> ContinuumScanResult | None:
         spec = self.specs[kind]
-        cube = self.stores[kind].get(kind, spectrum.lsf_sigma)
+        cube = self.stores[kind].get(kind, lsf_override if lsf_override is not None else spectrum.lsf_sigma)
         return cube_scan(spectrum, projected, cube, poly_degree=spec.poly_degree, nonnegative=spec.nonnegative,
                          separation_kms=self.separation_kms, z_prior=z_prior if spec.use_prior else None)
 
-    def run(self, spectrum, projected, z_prior: float | None = None, noise_inflation: float = 1.0) -> Classification | None:
+    def run_at_lsf(self, spectrum, projected, lsf_sigma: float, z_prior: float | None = None) -> Classification | None:
+        """Classify using ``lsf_sigma`` for the template smoothing instead of the spectrum's header value."""
+        return self.run(spectrum, projected, z_prior=z_prior, lsf_override=lsf_sigma)
+
+    def run(self, spectrum, projected, z_prior: float | None = None, noise_inflation: float = 1.0,
+            lsf_override: float | None = None) -> Classification | None:
         """Best class and redshift; ``noise_inflation`` divides the margins before thresholding."""
         per_class = {}
         for kind in self.specs:
-            res = self.scan_class(kind, spectrum, projected, z_prior)
+            res = self.scan_class(kind, spectrum, projected, z_prior, lsf_override)
             if res is not None:
                 per_class[kind] = res
         if not per_class:
