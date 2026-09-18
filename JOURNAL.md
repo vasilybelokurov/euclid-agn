@@ -2249,3 +2249,27 @@ The size of the error depends on environment: in blank fields the header is
 only mildly inflated (27 Å where the data want 22 Å), but around NGC 1527 it
 reads 62 Å where the data want 14 Å.  `LSF_SIG` appears to be inflated by a
 bright neighbour's light, which is exactly where it does most damage.
+
+### Velocities by source size and radius (`plots/ngc1527_velocities_resolved_unresolved.png`)
+
+The figure the point-source analysis needed, now covering both populations,
+with the resolved half measured by our archetype engine with a **fitted** LSF
+(the archive value over-smooths; see above) rather than rvspecfit, whose
+template library assumes a point source.
+
+| | 0–3′ | 3–10′ |
+|---|---|---|
+| **unresolved** (LSF σ < 16 Å) | 21 measured, \|v\|<300 = 38 %, 1 in the host window | 95 measured, \|v\|<300 = 83 %, 1 in the window |
+| **resolved** (LSF σ ≥ 20 Å) | 74 fitted → 24 at z<0.03 → **2** with Δχ²>9 | 186 fitted → 15 at z<0.03 → **3** with Δχ²>9 |
+
+Two things the split makes plain.  First, the unresolved inner sample is
+wrecked (the stellar peak at zero is gone, 38 % against 83 % outside) while
+the outer sample matches a blank field — the decontamination trough again.
+Second, **the resolved population cannot test this at all**: 85 % of resolved
+sources are background galaxies, and of the 39 the wide scan places locally
+only 5 carry real redshift evidence.  Against a control that yields 9 such
+objects, none of them near 1176 km/s, there is nothing to detect.
+
+With the fitted LSF the resolved velocities do improve — control \|v\| < 300
+rises from 50 % to 69 %, median reduced χ² 0.72 in the host field — but the
+sample size, not the precision, is what defeats the measurement.
