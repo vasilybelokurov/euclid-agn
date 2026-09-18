@@ -121,3 +121,18 @@ def test_multiplicative_polynomial_corrects_a_tilted_spectrum():
     # unconstrained mode takes the same path
     free = cube_scan(tilted, projected, cube, poly_degree=0, multiplicative_degree=2, nonnegative=False)
     assert abs(free.z - 0.08) < 0.006 and free.chi2 <= mult.chi2 + 1e-6
+
+
+def test_best_fit_model_reproduces_the_data_it_was_fitted_to():
+    from euclid_agn.fit.template_cube import best_fit_model
+
+    spectrum = toy_spectrum(z=0.08, snr=50.0)
+    projected = prepare(spectrum, ScreenSettings(n_knots=1, outlier_threshold=0.0))
+    cube = build_cube(toy_templates(), redshift_grid(0.0, 0.3, 300.0), spectrum.wavelength, 13.4, 14.0)
+    res = cube_scan(spectrum, projected, cube, poly_degree=0, nonnegative=True, multiplicative_degree=3)
+    w, model = best_fit_model(spectrum, projected, cube, res.z, poly_degree=0, multiplicative_degree=3)
+    keep = np.isin(spectrum.wavelength, projected.wavelength)
+    resid = (spectrum.flux[keep] - model) * projected.weight
+    assert np.isfinite(model).all() and model.shape == w.shape
+    # the rendered model must reach the chi-squared the scan reported (same solve, same z)
+    assert float(resid @ resid) == pytest.approx(res.chi2, rel=0.02)

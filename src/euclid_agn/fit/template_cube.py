@@ -293,6 +293,58 @@ def model_flux(spectrum, projected, cube: TemplateCube, result: ContinuumScanRes
     return model
 
 
+@blas_safe
+def best_fit_model(spectrum, projected, cube: TemplateCube, z: float, poly_degree: int = 0,
+                   nonnegative: bool = True, multiplicative_degree: int = 3,
+                   multiplicative_iterations: int = 2, line_columns: np.ndarray | None = None):
+    """Best-fit model in flux units at a fixed redshift, for plotting.
+
+    Repeats the solve of :func:`cube_scan` at one redshift and returns
+    ``(wavelength, model)`` on the kept pixels.  Written as its own function
+    rather than reconstructed from stored coefficients because the
+    multiplicative polynomial is solved by alternation and its factor is not
+    part of the coefficient vector.  ``line_columns`` (n_kept, n_lines), in
+    flux units, are appended non-negatively - that is how a joint
+    continuum+line fit is rendered.
+    """
+    keep = np.isin(spectrum.wavelength, projected.wavelength)
+    weight = projected.weight
+    data_w = spectrum.flux[keep] * weight
+    i = int(np.argmin(np.abs(np.log1p(cube.grid_z) - np.log1p(z))))
+    cont = cube.columns[i][keep]
+    if not np.isfinite(cont).all():
+        return projected.wavelength, np.full(weight.size, np.nan)
+    poly = polynomial_columns(projected.wavelength, poly_degree, reference=spectrum.wavelength)
+    mult = polynomial_columns(projected.wavelength, multiplicative_degree, reference=spectrum.wavelength)[:, 1:] if multiplicative_degree > 0 else None
+    n_c = cont.shape[1]
+    blocks = [cont] + ([line_columns] if line_columns is not None and line_columns.size else []) + [poly]
+    base = np.concatenate([b for b in blocks if b.shape[1]], axis=1)
+    n_nonneg = n_c + (line_columns.shape[1] if line_columns is not None and line_columns.size else 0)
+    design = base * weight[:, None]
+    scale = np.sqrt(np.mean(design**2, axis=0)); scale = np.where(scale > 0, scale, 1.0)
+    design = design / scale
+    factor = np.ones(weight.size)
+    for _ in range(max(multiplicative_iterations, 0) + 1):
+        if nonnegative:
+            free = design[:, n_nonneg:]
+            a = np.concatenate([design[:, :n_nonneg], free, -free], axis=1)
+            coefficients, _ = nnls(a, data_w, maxiter=50 * a.shape[1])
+            k = free.shape[1]
+            coefficients = np.concatenate([coefficients[:n_nonneg], coefficients[n_nonneg:n_nonneg + k] - coefficients[n_nonneg + k:]])
+        else:
+            coefficients, *_ = np.linalg.lstsq(design, data_w, rcond=None)
+        if mult is None or not mult.shape[1]:
+            break
+        mixture = design[:, :n_c] @ coefficients[:n_c]
+        resid = data_w - design @ coefficients
+        pc, *_ = np.linalg.lstsq(mixture[:, None] * mult, resid, rcond=None)
+        factor = factor * (1.0 + mult @ pc)
+        design = np.concatenate([(base[:, :n_c] * factor[:, None]) * weight[:, None] / scale[:n_c],
+                                 design[:, n_c:]], axis=1)
+    model_w = design @ coefficients
+    return projected.wavelength, model_w / weight
+
+
 class CubeStore:
     """Cubes keyed on (template set name, LSF bucket); built lazily."""
 
@@ -322,5 +374,5 @@ class CubeStore:
         return len(self._cubes)
 
 
-__all__ = ["TemplateCube", "CubeStore", "build_cube", "cube_scan", "fit_at", "model_flux", "polynomial_columns", "prior_penalty",
+__all__ = ["TemplateCube", "CubeStore", "build_cube", "cube_scan", "fit_at", "model_flux", "best_fit_model", "polynomial_columns", "prior_penalty",
            "redshift_grid"]
