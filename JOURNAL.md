@@ -2483,3 +2483,63 @@ Correction to a claim I made while working: the median broad flux is *not*
 "30× too bright for a quasar".  For a z ≈ 1 quasar with F_λ ≈ 2×10⁻¹⁷ and rest
 Hα equivalent width ~300 Å the expected line flux is ~10⁻¹⁴, so these values
 are if anything modest.
+
+## AGN detection measured on 2,754 confirmed quasars
+
+The 131-object sample was a cache artefact, not a data limit.  Built an index
+of **every EDF-N object with a Q1 spectrum** (`validation/edfn_index.py`, MER
+tile by tile, 123 tiles, 45 min): **1,683,630 objects**, H_AB median 21.7,
+17 % point-like.  Matching DESI DR1 quasars against it:
+
+* 3,151 DESI quasars in the indexed area, **2,755 (87 %) have a Q1 spectrum**
+  — not the 36 % I estimated earlier from a crude sky-coverage test;
+* z distribution 451 / 680 / 1,229 / 395 in 0–0.9 / 0.9–1.5 / 1.5–2.5 / >2.5;
+* they sit in 1,581 SIR files, median **one quasar per file**.
+
+Fetching them: walking to the right HDU over S3 costs 16.7 s per file (threads
+gain little — astropy parses thousands of headers under the GIL; processes
+gave 8 s), and downloading is 110 MB per file for a few tens of kB of use.
+IRSA's per-spectrum API (`api/spectrumdm/convert/...?hdu=N`, the association
+table's own ``path``) returns a VOTable with WAVELENGTH/SIGNAL/VAR/MASK/NDITH
+in **2.3 s**, so **2,754 spectra arrived in 6.4 minutes** into a 10 MB store
+(`validation/qso_extract.py`, `outputs/qso_spectra_edfn.npz`).  Caveat: the
+API serves one HDU, so there are no dithers and no per-object variance
+rescaling; the measured global inflation η² = 2 is applied instead, which is a
+floor rather than a correction.
+
+**Calibrating the orthogonality guard on the data.**  The power-law continuum
+cured the spline's flexibility but introduced its mirror image: with four
+stiff terms, residual curvature had nowhere to go and the widest Gaussian
+absorbed it.
+
+| min orthogonality | detected | widths railed at the scan edge | median FWHM |
+|---:|---:|---:|---:|
+| 0.5 | 50/105 | 34 % | 11,774 |
+| 0.7 | 48/105 | 6 % | 8,242 |
+| **0.8** | **45/105** | **0 %** | **8,242** |
+| 0.9 | 31/102 | 0 % | 4,239 |
+
+0.8 keeps 90 % of detections and removes railing entirely; it is now the
+default and is part of the measurement definition, so completeness must be
+quoted with it.
+
+**Result on 2,754 confirmed AGN** (2,379 with a permitted line in range,
+272 s):
+
+| | detected (Δχ² > 25) |
+|---|---:|
+| all | **40 %** |
+| z 0–0.9 | 44 % |
+| z 0.9–1.5 | **56 %** |
+| z 1.5–2.5 | 35 % |
+| z > 2.5 | 22 % |
+| S/N < 3 | 26 % |
+| S/N 3–10 | 48 % |
+| S/N > 10 | **68 %** |
+
+Δχ² > 50: 28 %; > 100: 19 %.  Detected median flux 2.0×10⁻¹⁵, broad-line S/N
+10.5, FWHM quartiles 5900–8200 km/s with **nothing railed**.  Hα carries 540
+of the 942 detections, then Hβ 189, He I 76, Hγ 50, Hδ 46, Pa-β 31.
+
+This is the AGN completeness curve the project needed, measured on real AGN
+rather than injections, on a sample 21× larger than yesterday's.

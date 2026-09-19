@@ -73,9 +73,10 @@ def broad_orthogonality(column: np.ndarray, continuum_design: np.ndarray, weight
     which any continuum model curves, so the widest components are partly
     degenerate with the continuum and will happily soak up continuum mismatch.
     The screening stage has guarded against this since session 5
-    (``min_broad_orthogonality``); the AGN measurement must too, or the fitted
-    "broad flux" is continuum error - measured here as a median flux 30x
-    brighter than a z ~ 1 quasar's H-alpha before the guard was applied.
+    (``min_broad_orthogonality``); the AGN measurement must too.  The
+    threshold is calibrated on the confirmed quasars: at 0.5, 34 % of detected
+    widths rail at the top of the scan (FWHM 21,000 km/s, unphysical); at 0.8
+    none do and 90 % of the detections survive; at 0.9 a third are lost.
     """
     w = np.asarray(column, dtype=np.float64) * weight
     norm = float(np.linalg.norm(w))
@@ -87,7 +88,7 @@ def broad_orthogonality(column: np.ndarray, continuum_design: np.ndarray, weight
 
 
 def measure(spectrum, z: float, lsf_sigma: float, sigma_grid=SIGMA_GRID, continuum: str = "power_law",
-            min_containment: float = 0.8, min_orthogonality: float = 0.5) -> dict:
+            min_containment: float = 0.8, min_orthogonality: float = 0.8) -> dict:
     """Best broad-line detection for one spectrum at a fixed redshift."""
     ok = spectrum.usable() & (spectrum.wavelength >= WAVELENGTH_MIN) & (spectrum.wavelength <= WAVELENGTH_MAX)
     if ok.sum() < 100:
@@ -127,6 +128,39 @@ def measure(spectrum, z: float, lsf_sigma: float, sigma_grid=SIGMA_GRID, continu
     return best
 
 
+def run_store(store: Path, truth: pd.DataFrame, continuum: str = "power_law", lsf: float = 13.7,
+              limit: int | None = None) -> pd.DataFrame:
+    """Measure every spectrum in an extracted store (no archive access).
+
+    The store carries the combined spectrum only, so the per-object dither
+    variance rescaling is unavailable and a global inflation was applied at
+    extraction; ``lsf`` is the smoothing width used for the line profiles,
+    defaulting to NISP's point-source value rather than the unreliable header.
+    """
+    from euclid_agn.validation.qso_extract import load_store
+
+    meta, spectrum_at = load_store(store)
+    truth = truth.drop_duplicates("object_id").set_index("object_id")
+    rows, started = [], time.time()
+    for i in range(len(meta) if limit is None else min(limit, len(meta))):
+        row = meta.iloc[i]
+        oid = int(row.object_id)
+        if oid not in truth.index:
+            continue
+        spectrum = spectrum_at(i)
+        z = float(truth.loc[oid, "desi_z"])
+        out = {"object_id": oid, "desi_z": z, "snr": float(row.snr), "lsf_used": lsf,
+               "usable_fraction": float(row.usable_fraction), "continuum": continuum,
+               "H_AB": float(truth.loc[oid].get("H_AB", np.nan))}
+        out.update(measure(spectrum, z, lsf, continuum=continuum))
+        rows.append(out)
+        if len(rows) % 250 == 0:
+            rate = len(rows) / (time.time() - started)
+            log.info("%d measured, %.1f/s, %.0f min left", len(rows), rate, (len(meta) - len(rows)) / max(rate, 1e-9) / 60)
+    log.info("%d objects in %.0f s", len(rows), time.time() - started)
+    return pd.DataFrame(rows)
+
+
 def run(sample: pd.DataFrame, continuum: str = "power_law") -> pd.DataFrame:
     rows = []
     started = time.time()
@@ -156,13 +190,19 @@ def summarise(t: pd.DataFrame, thresholds=(25, 50, 100)) -> str:
     lines = [f"n = {len(t)} confirmed quasars, {len(d)} with a broad line fittable in range"]
     for cut in thresholds:
         lines.append(f"  broad Delta chi2 > {cut:3d}: {(d.broad_delta_chi2 > cut).sum():3d} ({(d.broad_delta_chi2 > cut).mean():.0%})")
+    if "desi_z" in d:
+        for lo, hi in ((0, 0.9), (0.9, 1.5), (1.5, 2.5), (2.5, 6)):
+            s = d[(d.desi_z >= lo) & (d.desi_z < hi)]
+            if len(s):
+                lines.append(f"    z {lo}-{hi}: n={len(s):4d}, detected (>25) {(s.broad_delta_chi2 > 25).mean():.0%}")
     for lo, hi in ((0, 3), (3, 10), (10, 1e9)):
         s = d[(d.snr >= lo) & (d.snr < hi)]
         if len(s):
             lines.append(f"    S/N {lo}-{hi}: n={len(s):3d}, detected (>25) {(s.broad_delta_chi2 > 25).mean():.0%}, "
                          f"median FWHM {s[s.broad_delta_chi2 > 25].broad_fwhm_kms.median():.0f} km/s")
-    clean = d[~d.trough]
-    lines.append(f"  excluding trough-flagged: n={len(clean)}, detected {(clean.broad_delta_chi2 > 25).mean():.0%}")
+    if "trough" in d:
+        clean = d[~d.trough]
+        lines.append(f"  excluding trough-flagged: n={len(clean)}, detected {(clean.broad_delta_chi2 > 25).mean():.0%}")
     det = d[d.broad_delta_chi2 > 25]
     if len(det):
         lines.append(f"  detected: median flux {det.broad_flux.median() * 1e17:.1f}e-17, median broad S/N {det.broad_snr.median():.1f}, "
@@ -178,14 +218,21 @@ def main(argv=None) -> None:
     parser.add_argument("--sample", type=Path, default=Path("outputs/qso_fits_with_spe.parquet"))
     parser.add_argument("--truth", type=Path, default=Path("outputs/qso_truth_matched.parquet"))
     parser.add_argument("--continuum", default="power_law")
+    parser.add_argument("--store", type=Path, default=None, help="extracted spectra store (skips the archive)")
+    parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--out", type=Path, default=Path("outputs/agn_on_known_qsos.parquet"))
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    sample = pd.read_parquet(args.sample)
-    truth = pd.read_parquet(args.truth)[["object_id", "file"]]
-    sample = sample.merge(truth.drop_duplicates("object_id"), on="object_id", how="left").drop_duplicates("object_id")
-    print(f"{len(sample)} confirmed quasars; continuum = {args.continuum}")
-    t = run(sample, continuum=args.continuum)
+    if args.store:
+        truth = pd.read_parquet(args.truth)
+        print(f"store {args.store}; continuum = {args.continuum}")
+        t = run_store(args.store, truth, continuum=args.continuum, limit=args.limit)
+    else:
+        sample = pd.read_parquet(args.sample)
+        truth = pd.read_parquet(args.truth)[["object_id", "file"]]
+        sample = sample.merge(truth.drop_duplicates("object_id"), on="object_id", how="left").drop_duplicates("object_id")
+        print(f"{len(sample)} confirmed quasars; continuum = {args.continuum}")
+        t = run(sample, continuum=args.continuum)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     t.to_parquet(args.out, index=False)
     print(summarise(t))

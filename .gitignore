@@ -21,3 +21,6 @@ data/cache/
 
 # Multi-page fit galleries: regenerable with `python -m euclid_agn.validation.fit_gallery`
 plots/gallery_*/gallery.pdf
+
+# EDF-N spectra index: 96 MB, regenerable by euclid_agn.validation.edfn_index (~45 min)
+outputs/edfn_spectra_index.parquet
