@@ -24,3 +24,4 @@ plots/gallery_*/gallery.pdf
 
 # EDF-N spectra index: 96 MB, regenerable by euclid_agn.validation.edfn_index (~45 min)
 outputs/edfn_spectra_index.parquet
+plots/agn_gallery/*/gallery.pdf
