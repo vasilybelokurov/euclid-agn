@@ -2543,3 +2543,41 @@ of the 942 detections, then Hβ 189, He I 76, Hγ 50, Hδ 46, Pa-β 31.
 
 This is the AGN completeness curve the project needed, measured on real AGN
 rather than injections, on a sample 21× larger than yesterday's.
+
+### Detection rate is set by which line the grism can reach
+
+Splitting the 2,379 confirmed quasars by whether broad Hα falls inside
+12500–18500 Å explains most of the spread:
+
+| | n | detected |
+|---|---:|---:|
+| Hα **in** the grism | 1,023 | **54 %** |
+| Hα outside it | 1,357 | 29 % |
+| Hα in range **and** S/N > 10 | 87 | **80 %** |
+
+By the line the fit used: Hα 56 %, He I 10830 48 %, Pa-β 46 %, Hβ 29 %,
+Pa-γ 24 %, Hδ 21 %, Hγ 19 % — and by redshift, Hα availability is 100 % at
+z 0.9–1.5 (56 % detected), 77 % at 1.5–1.9 (43 %), zero below 0.9 (44 %) and
+zero above 1.9 (28 % falling to 22 %).
+
+So the non-detections are mostly physics, not pipeline failure: outside
+0.9 < z < 1.9 the grism sees only Pa-γ, Pa-β, He I or the higher Balmer
+lines, which are 10–50× weaker than Hα in a quasar.  The honest headline is
+therefore **54 % of confirmed quasars are detected where Hα is observable,
+rising to 80 % at S/N > 10**, and the AGN survey's natural redshift window is
+0.9 < z < 1.9.
+
+### Gallery of the decomposition (`plots/agn_gallery/`)
+
+Two subfolders, because the failures teach as much as the successes:
+``detected/`` sorted by Δχ² (strongest first) and ``not_detected/`` sorted by
+S/N descending, so the first pages are bright confirmed quasars where no
+broad line was recovered.  Each panel draws the spectrum with its ±1σ band,
+the full model, the continuum alone and continuum+broad, so it is visible
+whether the fit is describing a line or reshaping the continuum.
+
+Reading page 1 of each: the strong detections are textbook broad lines with
+the continuum correctly beneath, but several high-Δχ² "detections" are
+artefact-driven (chaotic spectra, single-pixel spikes) — the same lesson as
+the NGC 1527 velocity pile-up, and an argument for running the artefact cut
+before the AGN statistics rather than after.
