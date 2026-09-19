@@ -2433,3 +2433,53 @@ so narrow-line results are unchanged until the switch is validated on the
 redshift samples; broad-line measurement must set ``"power_law"``.
 Bias table: `outputs/broad_continuum_bias.parquet`; regression test
 `tests/unit/test_continuum_choice.py`.  351 tests pass.
+
+### AGN detection measured on confirmed AGN, and what the continuum fix buys
+
+`validation/agn_measurement.py` runs the M0/M1 decomposition on the 131 DESI
+quasars with Euclid spectra, redshift **held at the DESI value** so the
+decomposition is judged on its own; per-object fitted LSF; dither-scatter
+variance; trough flag recorded; widths scanned 750–9000 km/s over every
+permitted line in range, with containment and a new orthogonality guard.
+
+**Orthogonality of a broad Hα column to the continuum basis** (z = 1.2) — the
+clearest statement of why the spline was wrong:
+
+| σ (km/s) | FWHM | power law | spline k=12 |
+|---:|---:|---:|---:|
+| 750 | 1766 | 0.96 | 0.83 |
+| 3000 | 7064 | 0.86 | 0.38 |
+| 8000 | 18839 | **0.62** | **0.02** |
+
+At FWHM ≈ 19,000 km/s a 12-knot spline reproduces the broad line to 98 %: it
+*is* the continuum model.  `broad_orthogonality` now guards the measurement as
+it has guarded screening since session 5.
+
+**Detection on real AGN** (same objects, same everything except the continuum):
+
+| | power law | spline k=12 |
+|---|---:|---:|
+| Δχ² > 25 | **52 (43 %)** | 28 (23 %) |
+| Δχ² > 100 | 21 (18 %) | 13 (11 %) |
+| S/N < 3 | **32 %** | 6 % |
+| S/N 3–10 | **49 %** | 34 % |
+| S/N > 10 | **82 %** | 64 % |
+| median detected FWHM | 5900–8200 km/s | 4200–5900 km/s |
+| lines carrying detections | Hα 33, Hβ 9, He I 5, Pa-β 3, Hγ/Hδ 2 | Hα 17, Hβ 7, He I 3, Pa-β 1 |
+
+**The continuum fix nearly doubles the AGN detection rate on confirmed
+quasars** (43 % against 23 %), and the gain is largest at low S/N (32 % vs
+6 %) — the faint end where the survey's science lives.  The spline also biases
+the recovered width low (median FWHM 4200–5900 against 5900–8200 km/s),
+exactly as the synthetic test predicted: it absorbs the broadest wings.
+
+First measured number of its kind for this project: **detection completeness
+on real AGN is 43 % overall and 82 % at S/N > 10**, against a false-positive
+rate still to be recalibrated in this configuration.  Median broad flux of the
+detections is 3.6×10⁻¹⁵ erg s⁻¹ cm⁻² with broad-line S/N ≈ 10, and only 6 % of
+widths rail at the grid edge (was 21 % on the coarse grid).
+
+Correction to a claim I made while working: the median broad flux is *not*
+"30× too bright for a quasar".  For a z ≈ 1 quasar with F_λ ≈ 2×10⁻¹⁷ and rest
+Hα equivalent width ~300 Å the expected line flux is ~10⁻¹⁴, so these values
+are if anything modest.
