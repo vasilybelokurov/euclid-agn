@@ -8,7 +8,7 @@
 # 32.3 A, so R(lambda) = lambda/32.3, given to --resol_func.  Template step 6.7 A = half a
 # NISP pixel (13.4 A), range padded beyond the 11900-19002 A archive grid.
 set -euo pipefail
-PHX=~/data/euclid/templates/phoenix
+PHX=${SPECTRAL_TEMPLATES:-~/data/spectral_templates}/phoenix
 OUT=~/data/euclid/rvspecfit
 mkdir -p "$OUT"
 for z in -0.0 -0.5 -1.0 -2.0; do
@@ -21,10 +21,11 @@ A="PHOENIX-ACES-AGSS-COND-2011_R10000FITS_Z-1.0.Alpha=+0.40.zip"
 [ -d "$PHX/Z-1.0.Alpha=+0.40" ] || unzip -o -q "$PHX/$A" -d "$PHX/Z-1.0.Alpha=+0.40"
 # wavelength vector of the AWAV-LOG grid (identical for every file), as the FITS array rvspecfit expects
 python - <<'PY'
-import glob, numpy as np
+import glob, os
+import numpy as np
 from astropy.io import fits
 from pathlib import Path
-phx = Path("~/data/euclid/templates/phoenix").expanduser()
+phx = Path(os.environ.get("SPECTRAL_TEMPLATES", "~/data/spectral_templates")).expanduser() / "phoenix"
 f = sorted(phx.glob("Z-0.0/lte*.fits"))[0]
 h = fits.getheader(f)
 lam = np.exp(h["CRVAL1"] + (np.arange(h["NAXIS1"]) + 1 - h.get("CRPIX1", 1.0)) * h["CDELT1"])

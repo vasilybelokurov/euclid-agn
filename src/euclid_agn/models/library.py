@@ -27,6 +27,8 @@ one linear solve.
 
 from __future__ import annotations
 
+import os
+
 import logging
 import re
 from dataclasses import dataclass, field
@@ -42,7 +44,11 @@ from euclid_agn.numerics import blas_safe
 
 log = logging.getLogger(__name__)
 
-DEFAULT_ROOT = Path("~/data/euclid/templates").expanduser()
+#: Where the spectral libraries live.  These are *generic* - PHOENIX synthetic stars, the
+#: X-shooter Spectral Library and its population models, a quasar composite - and are shared
+#: with any other project that fits spectra, so they sit outside the Euclid data tree.
+#: Override with the ``SPECTRAL_TEMPLATES`` environment variable.
+DEFAULT_ROOT = Path(os.environ.get("SPECTRAL_TEMPLATES", "~/data/spectral_templates")).expanduser()
 
 #: Rest-frame ranges (Angstrom) unusable in ground-based NIR libraries.
 XSL_TELLURIC_GAPS: tuple[tuple[float, float], ...] = ((13500.0, 14250.0), (18000.0, 25000.0))
