@@ -52,8 +52,15 @@ WAVELENGTH_MIN, WAVELENGTH_MAX = 12500.0, 18500.0
 def visible_permitted(z: float, wavelength: np.ndarray, edge_margin: float = 200.0) -> list[str]:
     """Permitted lines inside the usable range at this redshift, brightest first."""
     lo, hi = max(wavelength.min(), WAVELENGTH_MIN) + edge_margin, min(wavelength.max(), WAVELENGTH_MAX) - edge_margin
-    order = ("Halpha", "Hbeta", "Pabeta", "Pagamma", "HeI10830", "Hgamma", "Hdelta", "MgII2799")
-    return [n for n in order if n in BY_NAME and lo <= BY_NAME[n].rest * (1 + z) <= hi]
+    # every permitted transition in the catalogue, strongest first in a type-1 AGN.  An earlier
+    # version named "MgII2799", which is not a catalogue key (the doublet is MgII2796/MgII2803),
+    # and omitted Pa-delta and Pa-alpha - so Mg II was never tried above z = 3.5 and Pa-delta
+    # never at z = 0.24-0.84, which is part of why the low- and high-z bins looked weak.
+    order = ("Halpha", "Hbeta", "MgII2796", "MgII2803", "Pabeta", "Paalpha", "HeI10830",
+             "Pagamma", "Padelta", "Hgamma", "Hdelta", "CIII1909", "HeII4686")
+    known = [n for n in order if n in BY_NAME]
+    missing = [n for n, line in BY_NAME.items() if line.permitted and n not in known]
+    return [n for n in known + missing if lo <= BY_NAME[n].rest * (1 + z) <= hi]
 
 
 def narrow_system_for(z: float, lsf_sigma: float, broad_line: str) -> NarrowSystem:

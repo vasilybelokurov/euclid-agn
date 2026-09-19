@@ -2581,3 +2581,45 @@ the continuum correctly beneath, but several high-Δχ² "detections" are
 artefact-driven (chaotic spectra, single-pixel spikes) — the same lesson as
 the NGC 1527 velocity pile-up, and an argument for running the artefact cut
 before the AGN statistics rather than after.
+
+### Both failure modes in the gallery, diagnosed
+
+Visual inspection showed spurious detections and obvious missed lines.  Both
+are now measured (`validation/agn_diagnostics.py`).
+
+**Spurious detections are spikes.**  A σ = 3000 km/s line covers ~25 pixels; a
+cosmic ray or decontamination edge covers one to three.  The fraction of Δχ²
+carried by the three best pixels separates them cleanly: 90 % of the signal
+sits in a median of **19 pixels for real detections and 3 for spike-like
+ones**.  Of the 942 detections, 132 (14 %) have > 50 % of Δχ² in three pixels,
+43 (5 %) over 70 %, 23 (2 %) over 90 %.  Examples:
+`plots/agn_spurious_detections.png`.
+
+**Missed lines are my own orthogonality guard.**  Searching the residual for
+unmodelled emission first found mostly *broad artefacts* — contamination
+blocks and edge steps, whose rest wavelengths cluster at no transition
+(`plots/agn_missed_lines.png`).  Searching instead at the *expected line
+position* found the real thing: **35 % of non-detections with S/N > 3 carry a
+> 5 σ flux excess over the continuum at the line**, 7 % over 10 σ.  For the
+nine strongest, containment passes 5–8 of 8 widths but **orthogonality ≥ 0.8
+passes only 1–5**, so the wide components a quasar actually has are never
+tried:
+
+| object | line | Δχ² in production | Δχ² with widths unguarded |
+|---|---|---:|---:|
+| 2707716761636953296 | Hβ | 22 | **1233** |
+| 2683286183647528784 | Hβ | 11 | **276** |
+| 2720080134671460552 | Hα | 10 | **165** |
+| 2734824261663319750 | Hα | 6 | **107** |
+
+The two errors have opposite signs and one root cause: **a hard orthogonality
+cut is the wrong instrument.**  Yesterday it was calibrated to stop width
+railing, and it does — by discarding the widest components whether they are
+real or not.  Wide components are genuinely more degenerate with the
+continuum, so they should carry a *higher Δχ² threshold*, not be excluded.
+
+Planned fix, in order: (1) width-dependent Δχ² thresholds calibrated from the
+off-redshift null, replacing the hard orthogonality cut; (2) a Δχ²-
+concentration cut to remove spike-driven detections; (3) re-run and re-quote
+completeness and purity.  Until then the 40 %/54 % detection figures are a
+*lower* bound and the purity figures an upper one.
