@@ -182,6 +182,11 @@ class ScreenSettings:
     #: Robust rejection of narrow outlier pixels the archive mask leaves in
     #: (see :mod:`euclid_agn.spectra.outliers`).  ``0`` disables it.
     outlier_threshold: float = 5.0
+    #: Nuisance continuum for the refine/decomposition step: "spline" or "power_law".
+    #: "spline" is the historical default and is right for narrow-line work; broad-line
+    #: measurement must use "power_law" (a 12-knot spline recovers 306 % of a 6000 km/s
+    #: line's flux and halves its Delta chi-squared - tests/unit/test_continuum_choice.py).
+    continuum: str = "spline"
     outlier_max_width: int = 2
     #: Which statistic ranks hypotheses.  ``"template"`` uses the best
     #: fixed-ratio template (one free amplitude, see
@@ -671,6 +676,7 @@ def refine(
         n_knots=settings.n_knots,
         bin_width=spectrum.bin_width,
         smoothness=settings.narrow_smoothness,
+        continuum=settings.continuum,
     )
 
 

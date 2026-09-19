@@ -31,7 +31,7 @@ from euclid_agn.fit.linear import LinearProblem, LinearSolution, delta_chi2, sol
 from euclid_agn.models.broad import BroadFamily
 from euclid_agn.models.narrow import NarrowFit, NarrowSystem, fit_narrow_system
 from euclid_agn.numerics import blas_safe
-from euclid_agn.spectra.continuum import continuum_block
+from euclid_agn.spectra.continuum import continuum_block, power_law_block
 
 
 @dataclass(frozen=True)
@@ -54,6 +54,24 @@ class ModelBlocks:
 
 
 @blas_safe
+def continuum_for(wavelength, continuum="spline", n_knots: int = 8, degree: int = 3,
+                  power_law_indices: tuple[float, ...] = (-2.0, -1.0, 0.0, 1.0)):
+    """Resolve a continuum specification into ``(design, penalty, names)``.
+
+    ``continuum`` is ``"spline"`` (the host-galaxy default), ``"power_law"``
+    (quasars - a spline bends on the scale of a broad line and eats its flux),
+    or a ready-made ``(design, penalty, names)`` triple, which is how a caller
+    supplies stellar-population archetypes projected at the fitted redshift.
+    """
+    if not isinstance(continuum, str):
+        return continuum
+    if continuum == "spline":
+        return continuum_block(wavelength, n_knots=n_knots, degree=degree)
+    if continuum == "power_law":
+        return power_law_block(wavelength, indices=power_law_indices)
+    raise ValueError(f"unknown continuum {continuum!r}")
+
+
 def assemble(
     wavelength: np.ndarray,
     narrow: NarrowSystem | None = None,
@@ -62,11 +80,13 @@ def assemble(
     n_knots: int = 8,
     degree: int = 3,
     bin_width: float | None = None,
+    continuum: object = "spline",
 ) -> ModelBlocks:
     """Build ``[continuum | narrow | broad]`` with bounds, names and penalty.
 
     The narrow block needs a profile: pass the one recovered by
-    :func:`euclid_agn.models.narrow.fit_narrow_system`.
+    :func:`euclid_agn.models.narrow.fit_narrow_system`.  ``continuum`` selects
+    the nuisance continuum; see :func:`continuum_for`.
     """
     wavelength = np.asarray(wavelength, dtype=np.float64)
     blocks: list[np.ndarray] = []
@@ -75,8 +95,8 @@ def assemble(
     slices: dict[str, slice] = {}
     start = 0
 
-    continuum_design, continuum_penalty, continuum_names = continuum_block(
-        wavelength, n_knots=n_knots, degree=degree
+    continuum_design, continuum_penalty, continuum_names = continuum_for(
+        wavelength, continuum, n_knots=n_knots, degree=degree
     )
     blocks.append(continuum_design)
     lowers.append(np.full(continuum_design.shape[1], -np.inf))
@@ -206,17 +226,20 @@ def fit_hypothesis(
     smoothness: float = 1.0,
     continuum_smoothness: float = 0.0,
     max_iterations: int = 25,
+    continuum: object = "spline",
 ) -> HypothesisFit:
     """Fit M0 and, if a broad family is supplied, M1 at one hypothesis.
 
     The narrow profile is solved once on M0 and then held fixed for M1, so the
-    only difference between the two models is the broad block.
+    only difference between the two models is the broad block.  ``continuum``
+    selects the nuisance continuum (:func:`continuum_for`): use
+    ``"power_law"`` for quasars, where a spline absorbs broad-line flux.
     """
     wavelength = np.asarray(wavelength, dtype=np.float64)
     flux = np.asarray(flux, dtype=np.float64)
     variance = np.asarray(variance, dtype=np.float64)
 
-    continuum_design, _, _ = continuum_block(wavelength, n_knots=n_knots)
+    continuum_design, _, _ = continuum_for(wavelength, continuum, n_knots=n_knots)
     narrow_fit = fit_narrow_system(
         wavelength,
         flux,
@@ -235,6 +258,7 @@ def fit_hypothesis(
         broad=None,
         n_knots=n_knots,
         bin_width=bin_width,
+        continuum=continuum,
     )
     m0 = solve(
         LinearProblem(
@@ -258,6 +282,7 @@ def fit_hypothesis(
             broad=broad,
             n_knots=n_knots,
             bin_width=bin_width,
+            continuum=continuum,
         )
         m1 = solve(
             LinearProblem(

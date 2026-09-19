@@ -2389,3 +2389,47 @@ usable AGN selection with a measured selection function — the thing M6 needs.
 
 The trough flag matters here too: 8 % of the quasars are flagged, and their
 redshifts are right 25 % of the time against 46 % for the clean ones.
+
+## Session 13 — the broad-line decomposition, updated
+
+The M0/M1 machinery from sessions 4–6 was intact and its 50 unit tests passed,
+but it predated the continuum work, the LSF finding and the artefact detector.
+Checking it against a *known* broad line exposed a serious defect.
+
+### The nuisance continuum was eating (or inventing) the broad line
+
+Synthetic quasar: power-law continuum plus one broad Hα of known flux at
+z = 1.2, S/N 60, fitted with the real machinery.  Recovered flux as a fraction
+of truth, and the detection statistic:
+
+| σ (km/s) | spline 8 knots | 12 | 20 | 30 | **power law** |
+|---:|---:|---:|---:|---:|---:|
+| 1500 | 98 % | 100 % | 75 % | 51 % | **98 %** |
+| 3000 | 121 % | 132 % | 69 % | 0 % | **110 %** |
+| 6000 | 156 % | 306 % | 0 % | 5482 % | **107 %** |
+| 10000 | 0 % | 1964 % | 0 % | 0 % | **100 %** |
+
+| σ (km/s) | Δχ², spline k=12 | Δχ², power law |
+|---:|---:|---:|
+| 1500 | 52 | **65** |
+| 3000 | 49 | **80** |
+| 6000 | 19 | **39** |
+| 10000 | 7 | **15** |
+
+A B-spline with the knot spacing used for narrow-line work is not stiff on the
+scale of a broad line: it either swallows the line or blows the flux up by an
+order of magnitude, and **it halves the detection statistic for the widest
+lines** — precisely the luminous quasars (FWHM ≳ 12,000 km/s) the search is
+for.  `ScreenSettings.n_knots` is 12, so this was the configuration in use.
+
+Fix: `spectra/continuum.py::power_law_block`, a four-column basis
+``(λ/λ₀)^index`` that spans quasar continua and *cannot* bend on the scale of
+a line; `models/forward.py::continuum_for` makes the block pluggable
+(``"spline"``, ``"power_law"``, or a caller-supplied ``(design, penalty,
+names)`` triple — which is how stellar archetypes at the fitted redshift will
+be passed for host-dominated AGN).  `fit_hypothesis(..., continuum=...)` and
+`ScreenSettings.continuum` carry it through.  The default stays ``"spline"``
+so narrow-line results are unchanged until the switch is validated on the
+redshift samples; broad-line measurement must set ``"power_law"``.
+Bias table: `outputs/broad_continuum_bias.parquet`; regression test
+`tests/unit/test_continuum_choice.py`.  351 tests pass.

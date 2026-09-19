@@ -94,3 +94,34 @@ def continuum_block(
     penalty = difference_penalty(design.shape[1], order=2)
     names = tuple(f"continuum_{i}" for i in range(design.shape[1]))
     return design, penalty, names
+
+
+def power_law_block(
+    wavelength: np.ndarray,
+    indices: tuple[float, ...] = (-2.0, -1.0, 0.0, 1.0),
+    pivot: float | None = None,
+) -> tuple[np.ndarray, np.ndarray, tuple[str, ...]]:
+    """Design block spanning power-law continua, for quasars.
+
+    A B-spline is the wrong nuisance continuum under a broad emission line: with
+    knots every few hundred Angstrom it can follow a 5,000 km/s line and absorb
+    a large part of its flux.  A quasar continuum is a power law, so a handful
+    of fixed power-law columns spans what is needed with four parameters that
+    *cannot* bend on the scale of a line.
+
+    Columns are ``(lambda / pivot) ** index``; the coefficients are free in
+    sign, so their combination covers a continuous range of effective slopes
+    and mild curvature.  There is no smoothness penalty: the basis is already
+    stiff.
+    """
+    wavelength = np.asarray(wavelength, dtype=np.float64)
+    pivot = float(pivot if pivot is not None else np.median(wavelength))
+    x = wavelength / pivot
+    design = np.column_stack([x**index for index in indices])
+    penalty = np.zeros((0, design.shape[1]))
+    names = tuple(f"powerlaw_{index:+.1f}" for index in indices)
+    return design, penalty, names
+
+
+#: Continuum blocks that :func:`euclid_agn.models.forward.fit_hypothesis` can use by name.
+CONTINUUM_BLOCKS = {"spline": continuum_block, "power_law": power_law_block}
